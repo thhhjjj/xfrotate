@@ -1,0 +1,24 @@
+# Build outputs
+obj/
+*_objs/
+*.o
+*.a
+*.elf
+*.bin
+*.hex
+*.map
+*.lst
+
+# Code::Blocks dependency / layout caches
+*.depend
+*.layout
+
+# Editor / IDE
+.vscode/
+*.cbp.user
+*.workspace.user
+
+# OS junk
+Thumbs.db
+Desktop.ini
+.DS_Store
