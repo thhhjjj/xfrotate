@@ -1,0 +1,25 @@
+---
+description: Treat include_lib and non-AD15 trees as read-mostly / out of scope
+globs: include_lib/**/*,app/bsp/common/**/*,app/src/mcu/**/*,app/src/mbox_mg/**/*,app/bsp/cpu/sh54/**/*,app/bsp/cpu/sh57/**/*,app/bsp/cpu/ch58/**/*
+alwaysApply: false
+---
+
+# SDK & Other-Product Boundaries
+
+When these paths are open, assume **read-mostly** unless the user explicitly asks to change them.
+
+## `include_lib/`
+
+SDK public headers and prebuilt libs (`include_lib/liba/sh55/voice_toy/*.a`). Prefer adapting app code to existing APIs over modifying SDK headers.
+
+## `app/bsp/common/`
+
+Shared BSP (decoder, USB, FS, key, msg). Do not rewrite these stacks to implement product features — extend `app/src/` instead.
+
+## Non-AD15 trees
+
+- `app/src/mcu/`, `app/src/mbox_mg/`
+- CPU dirs other than `sh55` (`sh54`, `sh57`, `ch58`)
+- Matching Makefiles / `.cbp` for AD14/AD17/AD18/AC104
+
+Default product work stays on **AD15N + sh55 + voice_toy**. Only port or edit other trees when the user names that target.

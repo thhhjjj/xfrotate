@@ -1,0 +1,39 @@
+---
+description: C coding conventions for AD15 product sources
+globs: app/src/**/*.{c,h}
+alwaysApply: false
+---
+
+# App C Conventions
+
+## Naming
+
+- Functions / files: `snake_case` — `user_init`, `zc_uart_init`, `servo_open`
+- Types / structs / enums / macros: `UPPER_SNAKE` — `GD_T`, `DEV_MANAGE`, `UART_FRAME_HEAD`, `SERVO_CMD_SET_ANGLE`
+- Include guards: `_NAME_H` or `__NAME_H__` — `_UART_COMMUNICATION_H`
+- Config switches: `TCFG_*`, `ENABLE`/`DISABLE`, `*_EN` in `app_config.h` / `app_modules.h`
+
+## Logging
+
+Always use the JieLi log pattern (do not invent another logger):
+
+```c
+#define LOG_TAG_CONST       NORM
+#define LOG_TAG             "[module_name]"
+#include "log.h"
+
+log_info("...");
+log_error("...");
+```
+
+Prefer `log_info` / `log_error` / `put_buf` over raw `printf` (except existing `DEV_DEBUG` stubs).
+
+## Work model
+
+- Drive work from the `get_msg` / `post_msg` loop in `toy_music_app()` (`MSG_4MS`, `MSG_24MS`, `MSG_300MS`, `MSG_UARTRX`, `MSG_UARTTX`, …)
+- Keep UART/device ISRs thin; post messages instead of heavy work in IRQ
+- Gate features with macros in `app_config.h` / `sh55/app_modules.h`, not ad-hoc `#if 0` sprawl
+
+## Comments
+
+Match nearby file style (Chinese protocol notes + English section banners are both common). Keep new public API comments clear and consistent with the file.

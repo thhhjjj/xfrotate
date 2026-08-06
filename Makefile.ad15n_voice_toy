@@ -151,6 +151,8 @@ INCLUDES := \
 	-Iapp/bsp/modules/timer \
 	-Iapp/bsp/start/sh54_sh55 \
 	-Iapp/post_build/sh55 \
+	-Iapp/bsp/db_update \
+	-Iapp/src/dev_control \
 	-Iapp/src/voice_toy \
 	-Iapp/src/voice_toy/common \
 	-Iapp/src/voice_toy/toy_music \
@@ -239,6 +241,14 @@ c_SRC_FILES := \
 	app/bsp/start/sh54_sh55/device_list.c \
 	app/bsp/start/sh54_sh55/init.c \
 	app/bsp/start/sh54_sh55/main.c \
+	app/bsp/db_update/db_update.c \
+	app/src/dev_control/infrared_control.c \
+	app/src/dev_control/key_control.c \
+	app/src/dev_control/led_control.c \
+	app/src/dev_control/servo_control.c \
+	app/src/mydev_manage.c \
+	app/src/uart_communication.c \
+	app/src/user.c \
 	app/src/voice_toy/app_config.c \
 	app/src/voice_toy/common/common_msg.c \
 	app/src/voice_toy/common/device_mge.c \

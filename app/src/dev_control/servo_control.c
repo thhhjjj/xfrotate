@@ -119,7 +119,7 @@ void move_func(void *dev) //4ms执行
 {
     SERVO_CTRL *dev_ctrl = (SERVO_CTRL *)dev;
     SERVO_PLATFORM_DATA *pdata = dev_ctrl->platform_data;
-    log_info("move_func mov_dir:%d,open_time:%d\n",pdata->mov_dir,pdata->open_time);
+    //log_info("move_func mov_dir:%d,open_time:%d\n",pdata->mov_dir,pdata->open_time);
     if (pdata->mov_dir == STOP) {
         IO_SERVO_OUT(IO_LSERVO, 0);
         IO_SERVO_OUT(IO_RSERVO, 0);

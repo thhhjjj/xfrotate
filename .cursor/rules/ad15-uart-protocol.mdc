@@ -1,0 +1,33 @@
+---
+description: UART frame protocol and TX/RX message path for AD15
+globs: app/src/uart_communication.*,app/bsp/cpu/sh55/uart_dev.c,app/src/voice_toy/toy_music/toy_music.c
+alwaysApply: false
+---
+
+# UART Protocol & Path
+
+## Layers
+
+| Layer | File | Role |
+|-------|------|------|
+| Protocol | `app/src/uart_communication.c/.h` | Frame parse, OTA/dev cmds, retry |
+| HW UART1 | `app/bsp/cpu/sh55/uart_dev.c` | ISR, `uart1_init` / `uart1_rx_read` / `uart1_tx_send` |
+| App loop | `toy_music/toy_music.c` | `MSG_UARTRX` / `MSG_UARTTX` / `MSG_300MS` |
+
+## Frame contract
+
+- Magic: `UART_FRAM_FLAG 0x4658`
+- Header: packed `UART_FRAME_HEAD` (`#pragma pack(1)`)
+- State: global `ZC_UART` via `zc_uart_init()`
+- Send APIs: `send_cmd_by_uart`, `send_reply_by_uart` / `send_replycmd`
+- Recv: `uart_recv_task`; retry wait: `zc_await_reply` on `MSG_300MS`
+- Cmd enums in `UART_DATA_TYPE` (OTA + UUID/SN/IR/servo). Reply types often OR `0x80`
+
+When extending commands, add the enum in `uart_communication.h` and handle it next to existing `UART_DATA_*` / `OTA_*` cases — keep frame layout and checksum rules unchanged.
+
+## Message path (required)
+
+- RX ISR → `post_msg(..., MSG_UARTRX)` → `uart1_rx_read()` → protocol
+- TX: `data_send` / protocol → `post_msg(3, MSG_UARTTX, buf, size)` → `uart1_tx_send`
+
+Do **not** do blocking TX or protocol parsing inside the UART ISR. Keep HW pin/baud changes in `uart_dev.c` unless the task explicitly targets BSP.

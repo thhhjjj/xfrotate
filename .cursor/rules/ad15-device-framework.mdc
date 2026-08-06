@@ -1,0 +1,41 @@
+---
+description: Device table framework (GD_T / DEV_ENTRY) for product peripherals
+globs: app/src/dev_control/**/*,app/src/mydev_manage.*,app/src/user.c,app/src/user_define.h,app/src/mydev_manage.h
+alwaysApply: false
+---
+
+# Device Framework
+
+Product peripherals use a fixed device table — do not invent a parallel framework.
+
+## Core types (`user_define.h`)
+
+- IDs: `SERVO_DEV`, `LED_DEV`, `KEY_DEV`, `INFRARED_DEV`
+- Ops on `DEV_MANAGE`: `dev_open` / `dev_read` / `dev_write` / `dev_ioctl` / `dev_release`
+- Global context: `GD_T gd` with `dev_table` + `save_data`
+
+## Register devices (`mydev_manage.c`)
+
+```c
+DEV_MANAGE dev_table_t[DEV_TABLE_MAX] = {
+    DEV_ENTRY(char_dev, SERVO_DEV, servo_open, servo_read, servo_write, servo_ioctl, servo_release),
+    // ...
+};
+```
+
+## Lifecycle
+
+- Open all in `user_init()` → `mydev_open(&gd)`
+- Close in `user_deinit()` → `mydev_close(&gd)`
+- Call via table, e.g. `gd.dev_table[SERVO_DEV].dev_ioctl(servo_ctrl, SERVO_CMD_SET_ANGLE, 45)`
+
+## Adding a new device
+
+1. Add ID in `user_define.h` (before `DEV_MAX`)
+2. Implement `*_open/read/write/ioctl/release` under `app/src/dev_control/`
+3. Add `DEV_ENTRY(...)` in `dev_table_t[]`
+4. Open/close in `user.c`
+5. Poll/act from `toy_music.c` message cases (`MSG_4MS` / `MSG_24MS` / key msgs)
+6. Add the new `.c` to `AD15N_voice_toy.cbp`
+
+Use stubs (`dev_stub_*`) only for unfinished slots; set `DEV_DEBUG` for stub printf.

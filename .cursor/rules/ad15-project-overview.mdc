@@ -1,0 +1,38 @@
+---
+description: AD15N voice-toy project map, primary target, and edit boundaries
+alwaysApply: true
+---
+
+# AD15N Voice Toy Project
+
+This repo is a JieLi AD15N (CPU `sh55`) voice-toy firmware test project. Default product target is **AD15N voice toy**, not AD14/AD17/AD18/MCU/mbox samples.
+
+## Primary build
+
+- Project: `AD15N_voice_toy.cbp`
+- Make: `make ad15n_voice_toy` → `Makefile.ad15n_voice_toy`
+- Defines: `D_TOY_SDK=1`, `D_APP_TOY=1`, `CPU_SH55=1`
+- CPU BSP: `app/bsp/cpu/sh55/`; post-build: `app/post_build/sh55/`
+
+Product sources (`user.c`, `uart_communication.c`, `mydev_manage.c`, `dev_control/*`) are linked via the `.cbp`. When adding a new `.c`, update `AD15N_voice_toy.cbp`.
+
+## Where to edit
+
+| Area | Path |
+|------|------|
+| Product logic | `app/src/` (`user*`, `uart_communication*`, `mydev_manage*`, `dev_control/`) |
+| Voice-toy modes | `app/src/voice_toy/` (main loop: `toy_music/toy_music.c`) |
+| AD15 UART HW | `app/bsp/cpu/sh55/uart_dev.c` |
+| OTA helpers | `app/bsp/db_update/` |
+| Feature/pin config | `app/src/voice_toy/app_config.h`, `voice_toy/sh55/app_modules.h` |
+
+## Do not (unless explicitly asked)
+
+- Edit `include_lib/` (SDK headers / prebuilt `.a`)
+- Change other chip trees (`sh54`/`sh57`/`ch58`) or other products (`mcu/`, `mbox_mg/`, `AD14N_*`, `AD17N_*`, `AD18N_*`)
+- Rewrite stock decoder/USB stacks under `app/bsp/common/` for product features
+- Commit `obj/`, `*_objs/`, `*.depend`
+
+## Boot / call chain
+
+`c_main` → `app()` (`toy_main.c`) → `toy_music_app()` → `user_init()` + `uart1_init()` + `zc_uart_init()` → `get_msg` loop
