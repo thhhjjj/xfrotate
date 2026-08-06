@@ -58,7 +58,7 @@ void servo_switch_read(void *dev) //4ms任务
     SERVO_CTRL *dev_ctrl = (SERVO_CTRL *)dev;
     SERVO_PLATFORM_DATA *pdata = dev_ctrl->platform_data;
     static u16 state_cnt = 0;
-    log_info("servo_switch_state:%d,%d,%d\n",gpio_read(IO_ANGLE0),gpio_read(IO_ANGLE90),gpio_read(IO_ANGLE180));
+    //log_info("servo_switch_state:%d,%d,%d\n",gpio_read(IO_ANGLE0),gpio_read(IO_ANGLE90),gpio_read(IO_ANGLE180));
     if ((!gpio_read(IO_ANGLE0)) && (pdata->half_zone_flag == LEFT_ZONE)) {
         pdata->half_zone_flag = LEFT_MAX;
         state_cnt = 1;

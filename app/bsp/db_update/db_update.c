@@ -144,7 +144,9 @@ u32 db_update_write(UP_DATE *ctrl)
         return GET_BUF_ERR;
     }
     // write 512 byte
-    log_info("=======write_buf========");
+    if (!g_ota_busy) {
+        log_info("=======write_buf========");
+    }
     u32 pkg_len = ctrl->data_size;//
     // count crc16
     ctrl->data_crc = chip_crc16_with_init(ctrl->data_buf, pkg_len, ctrl->data_crc);
@@ -163,7 +165,7 @@ u32 db_update_write(UP_DATE *ctrl)
     wdt_clear();//clr wdt
     if(res == 0xffffffff){
         log_info("total data write finish,total data size:%d, total crc:0x%x",ctrl->data_offset,ctrl->data_crc);
-    }else{
+    }else if (!g_ota_busy){
         log_info("write addr:0x%x len:%d crc:%x",ctrl->flash_offset, pkg_len, ctrl->data_crc);
     }
     return res;

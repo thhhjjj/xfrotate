@@ -18,19 +18,54 @@ ZC_UART *ZcUart = NULL;
 // u8 recv_buf[13]={0x00};
 u8 serial = 0;
 u8 off = 0;
+u8 g_ota_busy = 0;
+static u32 ota_lost_pkg = 0;
+static u16 ota_total_pkg = 0;
 
 extern SERVO_CTRL *servo_ctrl;
+extern void uart1_tx_send(u8 *buf, int buf_size);
+static unsigned short checksum_frame(u8 *buf, u32 need_byte);
 //=====================================================================================================================
 //                                                      Others about
 //=====================================================================================================================
 //data send buf
 void data_send(u8 *buf,int buf_size)
 {
-    log_info("===========send data===========");
+    if (!g_ota_busy) {
+        log_info("===========send data===========");
+        put_buf(buf, buf_size);
+    }
     Uart_buf.buf = buf;
     Uart_buf.size = buf_size;
-    put_buf(Uart_buf.buf,Uart_buf.size);
     post_msg(3,MSG_UARTTX,Uart_buf.buf,Uart_buf.size);
+}
+
+/* build reply frame then TX immediately (for OTA finish before reset) */
+static int send_reply_by_uart_sync(unsigned char Type,
+                                   unsigned char *data,
+                                   unsigned short len,
+                                   unsigned short Fuid,
+                                   unsigned short total_num)
+{
+    UART_FRAME_HEAD FrameHead = {0};
+    unsigned short templen = 0, Chk = 0;
+    if (!ZcUart)
+        return -1;
+    FrameHead.flag = UART_FRAM_FLAG;
+    FrameHead.len = 1 + len;
+    FrameHead.cur_num = Fuid;
+    FrameHead.total_num = total_num;
+    memcpy(&SendBuff[0], &FrameHead, HEAD_LEN);
+    SendBuff[HEAD_LEN] = Type;
+    if (len)
+        memcpy(&SendBuff[HEAD_LEN + 1], data, len);
+    templen = HEAD_LEN + len + 1;
+    Chk = checksum_frame(SendBuff, templen);
+    SendBuff[8] = Chk;
+    SendBuff[9] = (Chk >> 8) & 0xff;
+    ZcUart->tx_send_len = templen;
+    uart1_tx_send(SendBuff, ZcUart->tx_send_len);
+    return 0;
 }
 //reset recv buff
 void reset_recv_states(void)
@@ -114,6 +149,7 @@ u8 recive_frame_check(u8 type)
         case UART_DATA_IR_ONOFF:
         case UART_DATA_SR_ONOFF:
         case UART_DATA_IR_STATUS:
+        case UART_DATA_SR_SET_STATUS:
             return 2;
         break;
         //judge whether it is receive callback cmd?
@@ -126,6 +162,7 @@ u8 recive_frame_check(u8 type)
         case UART_DATA_IR_ONOFF|0x80:
         case UART_DATA_SR_ONOFF|0x80:
         case UART_DATA_IR_STATUS|0x80:
+        case UART_DATA_SR_SET_STATUS|0x80:
             return 1;
         break;
         default:
@@ -318,7 +355,9 @@ static void uart_recv_handle(char *FrameData)
     if(orderbuf==NULL){
         return;
     }
-    log_info("=========type:%x==========",orderbuf->Type);
+    if (!g_ota_busy) {
+        log_info("=========type:%x==========",orderbuf->Type);
+    }
     //put_buf(orderbuf->Data,orderbuf->data_len);
     switch (orderbuf->Type)
     {
@@ -371,95 +410,114 @@ static void uart_recv_handle(char *FrameData)
             send_reply_by_uart(UART_DATA_IR_STATUS,&tmpData,1,0,1);
             break;
         }
-        case UART_DATA_SR_SET_STATUS:
+        case UART_DATA_SR_SET_STATUS:{
             int angle =  orderbuf->Data[0]         |
                          (orderbuf->Data[1] << 8)  |
                          (orderbuf->Data[2] << 16) |
-                         (orderbuf->Data[3] << 24);//
-            if(servo_ctrl){
-                //gd.dev_table[SERVO_DEV].dev_write(servo_ctrl,&angle,4);
+                         (orderbuf->Data[3] << 24);
+            if(servo_ctrl && orderbuf->data_len >= 4){
+                gd.dev_table[SERVO_DEV].dev_ioctl(servo_ctrl, SERVO_CMD_SET_ANGLE, (u32)angle);
             }
             send_reply_by_uart(UART_DATA_SR_SET_STATUS,&orderbuf->Data[0],4,0,1);
             break;
+        }
         case OTA_READ_VERSION:{
             u8 tmpData[6] = {0};
             memcpy(tmpData, gd.save_data.version, 6);
             send_reply_by_uart(OTA_READ_VERSION,tmpData,6,0,1);
             break;
         }
-        case OTA_INIT:
+        case OTA_INIT:{
             int t_size = orderbuf->Data[0]        |
                         (orderbuf->Data[1] << 8)  |
                         (orderbuf->Data[2] << 16) |
-                        (orderbuf->Data[3] << 24);//
+                        (orderbuf->Data[3] << 24);
             u32 c_ver = 0xffffffffU;
+            ota_lost_pkg = 0;
+            ota_total_pkg = 0;
             ctrl_updatep = db_update_buf_malloc();
-            {
-                err_code = db_update_init(t_size,c_ver,ctrl_updatep);
-                if(err_code){
-                    db_update_deinit(0,ctrl_updatep);
-                    u8 send_buf = 0x01;
-                    send_reply_by_uart(OTA_INIT,&send_buf,1,0,1);//initial fail
-                }else{
-                    u8 send_buf = 0x00;
-                    send_reply_by_uart(OTA_INIT,&send_buf,1,0,1);//initial success
-                }
+            if(ctrl_updatep == NULL){
+                u8 send_buf = 0x01;
+                g_ota_busy = 0;
+                send_reply_by_uart(OTA_INIT,&send_buf,1,0,1);
+                break;
+            }
+            err_code = db_update_init(t_size,c_ver,ctrl_updatep);
+            if(err_code){
+                db_update_deinit(0,ctrl_updatep);
+                u8 send_buf = 0x01;
+                g_ota_busy = 0;
+                send_reply_by_uart(OTA_INIT,&send_buf,1,0,1);//initial fail
+            }else{
+                u8 send_buf = 0x00;
+                g_ota_busy = 1;
+                send_reply_by_uart(OTA_INIT,&send_buf,1,0,1);//initial success
             }
             break;
+        }
         case OTA_RECIVE:{
-            static u32 lost_pkg = 0;
-            static u16 total_pkg = 0;
-            if((orderbuf->allFuid != total_pkg) && (total_pkg)){
+            if((orderbuf->allFuid != ota_total_pkg) && (ota_total_pkg)){
                 goto __break;
             }
-            if(orderbuf->data_len > 512){
+            if(orderbuf->data_len > UART_OTA_MAX_DATA_LEN){
                 goto __break;
             }
-            if (!total_pkg){
-                total_pkg = orderbuf->allFuid;
+            if (!ota_total_pkg){
+                ota_total_pkg = orderbuf->allFuid;
             }
-            if((orderbuf->Fuid == lost_pkg) || ((!lost_pkg) && (!orderbuf->Fuid))){
-                lost_pkg++;
+            if((orderbuf->Fuid == ota_lost_pkg) || ((!ota_lost_pkg) && (!orderbuf->Fuid))){
+                ota_lost_pkg++;
                 ctrl_updatep->data_buf = orderbuf->Data;
                 ctrl_updatep->data_size = orderbuf->data_len;
                 err_code = db_update_write(ctrl_updatep);
 
                 if(err_code==0xffffffff){//recive over
-                    lost_pkg = 0;
+                    ota_lost_pkg = 0;
+                    ota_total_pkg = 0;
                     u8 send_buf = 0x00;
-                    send_reply_by_uart(OTA_RECIVE,&send_buf,1,0,1);//
+                    send_reply_by_uart_sync(OTA_RECIVE,&send_buf,1,0,1);
                     goto __recive_ok;
                 }else{
                     u8 send_buf = 0x00;
                     if(err_code)
                         send_buf = 0x01;
-                    send_reply_by_uart(OTA_RECIVE,&send_buf,1,0,1);
+                    /* OTA path: sync TX so host can ACK-next immediately */
+                    if (g_ota_busy)
+                        send_reply_by_uart_sync(OTA_RECIVE,&send_buf,1,0,1);
+                    else
+                        send_reply_by_uart(OTA_RECIVE,&send_buf,1,0,1);
                 }
             }else{//丢包，请求重传当前lost_pkg
                 u8 send_buf[5] = {0};
                 send_buf[0] = 0x01;
-                // send_buf[1] = lost_pkg & 0xff;
-                // send_buf[2] = (lost_pkg >> 8) & 0xff;
-                // send_buf[3] = (lost_pkg >> 16) & 0xff;
-                // send_buf[4] = (lost_pkg >> 24) & 0xff;
-                send_reply_by_uart(OTA_RECIVE, send_buf, 1, 0, 1);
+                if (g_ota_busy)
+                    send_reply_by_uart_sync(OTA_RECIVE, send_buf, 1, 0, 1);
+                else
+                    send_reply_by_uart(OTA_RECIVE, send_buf, 1, 0, 1);
             }
             break;
 __recive_ok:
             {
                 u8 send_buf = 0x00;
                 err_code = db_update_verify(ctrl_updatep);
-                if(err_code)
-                    send_reply_by_uart(OTA_FAIL,&send_buf,1,0,1);
-                else
-                    send_reply_by_uart(OTA_SUCCESS,&send_buf,1,0,1);
-                db_update_deinit(!send_buf,ctrl_updatep);
+                if(err_code){
+                    g_ota_busy = 0;
+                    send_reply_by_uart_sync(OTA_FAIL,&send_buf,1,0,1);
+                    db_update_deinit(0,ctrl_updatep);
+                }else{
+                    send_reply_by_uart_sync(OTA_SUCCESS,&send_buf,1,0,1);
+                    g_ota_busy = 0;
+                    db_update_deinit(1,ctrl_updatep);// success -> reset
+                }
             }
             break;
 __break:
             {
                 u8 send_buf = 0x02;
-                send_reply_by_uart(OTA_RECIVE,&send_buf,1,0,1);
+                if (g_ota_busy)
+                    send_reply_by_uart_sync(OTA_RECIVE,&send_buf,1,0,1);
+                else
+                    send_reply_by_uart(OTA_RECIVE,&send_buf,1,0,1);
             }
             break;
         }
@@ -557,10 +615,14 @@ void uart_recv_task(char *buf, int len)
         reset_recv_states();
         return;
     }
-    log_info("===========recv data,len:%d===========",len);
+    if (!g_ota_busy) {
+        log_info("===========recv data,len:%d===========",len);
+    }
     memcpy(RecvBuff + ZcUart->rx_rev_len, buf, len);
     ZcUart->rx_rev_len += len;
-    put_buf(RecvBuff,ZcUart->rx_rev_len);
+    if (!g_ota_busy) {
+        put_buf(RecvBuff,ZcUart->rx_rev_len);
+    }
     // 搜索帧头
     if (!ZcUart->rx_recving && ZcUart->rx_rev_len >= HEAD_LEN) {
         if (check_head(RecvBuff, &ZcUart->rx_rev_len) == 0) {
@@ -577,7 +639,9 @@ void uart_recv_task(char *buf, int len)
         if (ZcUart->rx_rev_len >= need_byte) {
             unsigned short chk = checksum_frame(RecvBuff, need_byte);
             if (chk == ZcUart->FrameHead.checksum) {
-                log_info("checksum pass");
+                if (!g_ota_busy) {
+                    log_info("checksum pass");
+                }
                 uart_recv_handle((char *)RecvBuff);
             }else{
                 log_info("checksum fail");

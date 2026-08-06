@@ -10,8 +10,9 @@
 
 //#define MAX_FRAME_LEN           1024
 //#define MAX_OTA_BYTE            1024
-#define UART_RECV_BUFF_LEN      (700)
+#define UART_RECV_BUFF_LEN      (2048)
 #define UART_SEND_BUFF_LEN      (256)
+#define UART_OTA_MAX_DATA_LEN   (1024)
 
 // ======================== 命令枚举 =======================
 // command class
@@ -94,4 +95,5 @@ extern int send_cmd_by_uart(unsigned char Type, unsigned char *data, unsigned sh
 extern void uart_recv_task(char *buf,int len);
 extern int zc_uart_init(void);
 extern void zc_await_reply(void);
+extern u8 g_ota_busy;
 #endif

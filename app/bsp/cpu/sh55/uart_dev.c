@@ -732,15 +732,21 @@ void uart1_rx_callback(void *bus, unsigned int event)
     switch(event)
     {
         case UT_RX:
-            log_info("RX:\n");
+            if (!g_ota_busy) {
+                log_info("RX:\n");
+            }
             post_msg(1,MSG_UARTRX);
             break;
         case UT_RX_OT:
-            log_info("RX: over time\n");
+            if (!g_ota_busy) {
+                log_info("RX: over time\n");
+            }
             post_msg(1,MSG_UARTRX);
             break;
         case UT_TX:
-            log_info("TX:send\n");
+            if (!g_ota_busy) {
+                log_info("TX:send\n");
+            }
             break;
         default:
             break;
@@ -771,7 +777,7 @@ void uart1_init(void)
     arg.rx_cbuf = read_buf;
     arg.rx_cbuf_size = sizeof(read_buf);
     arg.frame_length = sizeof(read_data);
-    arg.rx_timeout = 20; 
+    arg.rx_timeout = 5; 
     arg.isr_cbfun = uart1_rx_callback; 
     arg.argv = JL_UT1;
     arg.is_9bit = 0;

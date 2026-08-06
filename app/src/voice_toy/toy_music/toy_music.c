@@ -61,7 +61,7 @@ static const char dir_ext_vm_tab[EXT_DIR_NUM] = {
     VM_INDEX_EXT_SONG,
 };
 #endif
-char version[6] = "1.0.0";
+char version[6] = "1.2.4";
 char uuid[16] = {0};
 char sn[33] = {0};
 extern u8 read_data[1024];
@@ -289,11 +289,15 @@ void toy_music_app(void)
                 if((!tmpData)&&(infrared_ctrl->human_flag)){
                     log_info("human_flag:%d\n",infrared_ctrl->human_flag);
                     tmpData = infrared_ctrl->human_flag;
-                    send_cmd_by_uart(UART_DATA_IR_STATUS,&tmpData,1,0,1);
+                    if (!g_ota_busy) {
+                        send_cmd_by_uart(UART_DATA_IR_STATUS,&tmpData,1,0,1);
+                    }
                 }else if((tmpData)&&(!infrared_ctrl->human_flag)){
                     log_info("human_flag:%d\n",infrared_ctrl->human_flag);
                     tmpData = infrared_ctrl->human_flag;
-                    send_cmd_by_uart(UART_DATA_IR_STATUS,&tmpData,1,0,1);
+                    if (!g_ota_busy) {
+                        send_cmd_by_uart(UART_DATA_IR_STATUS,&tmpData,1,0,1);
+                    }
                 }
             }  
             gd.dev_table[SERVO_DEV].dev_write(servo_ctrl, NULL, 0);
