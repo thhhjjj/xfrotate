@@ -21,6 +21,7 @@
 #include "infrared_control.h"
 #include "key_control.h"
 #include "led_control.h"
+#include "test_mode.h"
 #define LOG_TAG_CONST       NORM
 #define LOG_TAG             "[toy_music]"
 #include "log.h"
@@ -79,7 +80,10 @@ void dev_info_update(void)
 {
     vm_read(SN_INFO_SAVE, (u8*)sn, sizeof(sn));
     if(sn[0]){
+        gd.save_data.sn_exist = 1;
         gd.save_data.sn = &sn[1];
+    }else{
+        gd.save_data.sn_exist = 0;
     }
     gd.save_data.version = version;
     memcpy(uuid, get_norflash_uuid(), 16);
@@ -244,34 +248,23 @@ void toy_music_app(void)
             }
 #endif
         case MSG_KEY:
+            if (g_test_mode) {
+                test_mode_on_key((u8)msg[1]);
+                break;
+            }
             switch (msg[1])
             {                
                 case PRESS:
                     log_info("PRESS\n");
                     gd.dev_table[SERVO_DEV].dev_ioctl(servo_ctrl, SERVO_CMD_SET_ANGLE, 45);
-                    // if(infrared_ctrl == NULL){
-                    //     infrared_ctrl = gd.dev_table[INFRARED_DEV].dev_open(NULL);
-                    //     gd.dev_table[LED_DEV].dev_ioctl(led_ctrl, LED_CMD_IO_FUNC_ON,0);
-                    // }else{
-                    //     gd.dev_table[INFRARED_DEV].dev_release(infrared_ctrl);
-                    //     gd.dev_table[LED_DEV].dev_ioctl(led_ctrl, LED_CMD_IO_FUNC_OFF,0);
-                    // }
                     break;
                 case DOUBLE_PRESS:
                     log_info("DOUBLE_PRESS\n");
                     gd.dev_table[SERVO_DEV].dev_ioctl(servo_ctrl, SERVO_CMD_SET_ANGLE, 90);
-                    // gd.dev_table[LED_DEV].dev_ioctl(led_ctrl, LED_CMD_ALL_FUNC_OFF,0);
                     break;
                 case LONG_PRESS:
                     log_info("LONG_PRESS\n");
                     gd.dev_table[SERVO_DEV].dev_ioctl(servo_ctrl, SERVO_CMD_SET_ANGLE, 135);
-                    // if(servo_ctrl == NULL){
-                    //     servo_ctrl = gd.dev_table[SERVO_DEV].dev_open(NULL);
-                    //     gd.dev_table[LED_DEV].dev_ioctl(led_ctrl, LED_CMD_IO_FUNC_ON,1);
-                    // }else{
-                    //     gd.dev_table[SERVO_DEV].dev_release(servo_ctrl);
-                    //     gd.dev_table[LED_DEV].dev_ioctl(led_ctrl, LED_CMD_IO_FUNC_OFF,1);
-                    // }
                     break;
                 default:
                     break;
@@ -289,24 +282,26 @@ void toy_music_app(void)
                 if((!tmpData)&&(infrared_ctrl->human_flag)){
                     log_info("human_flag:%d\n",infrared_ctrl->human_flag);
                     tmpData = infrared_ctrl->human_flag;
-                    if (!g_ota_busy) {
+                    if (!g_ota_busy && !g_test_mode) {
                         send_cmd_by_uart(UART_DATA_IR_STATUS,&tmpData,1,0,1);
                     }
                 }else if((tmpData)&&(!infrared_ctrl->human_flag)){
                     log_info("human_flag:%d\n",infrared_ctrl->human_flag);
                     tmpData = infrared_ctrl->human_flag;
-                    if (!g_ota_busy) {
+                    if (!g_ota_busy && !g_test_mode) {
                         send_cmd_by_uart(UART_DATA_IR_STATUS,&tmpData,1,0,1);
                     }
                 }
             }  
             gd.dev_table[SERVO_DEV].dev_write(servo_ctrl, NULL, 0);
+            test_mode_poll_24ms();
             break;
         case MSG_300MS:
             zc_await_reply();
             break;
         case MSG_500MS:
             wdt_clear();
+            test_mode_poll_500ms();
             //log_info("MSG_500MS\n");
             break;
         case MSG_UARTRX:

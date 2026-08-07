@@ -32,6 +32,8 @@ typedef enum {
     UART_DATA_SR_ONOFF,
     UART_DATA_IR_STATUS,
     UART_DATA_SR_SET_STATUS,
+    UART_DATA_TEST_MODE,
+    UART_DATA_TEST_RESULT,
 } UART_DATA_TYPE;
 // ======================= 帧头结构体 =======================
 // frame head define

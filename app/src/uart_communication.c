@@ -13,6 +13,7 @@
 #include "servo_control.h"
 #include "infrared_control.h"
 #include "user_define.h"
+#include "test_mode.h"
 UART_BUF Uart_buf = {0x00};
 ZC_UART *ZcUart = NULL;
 // u8 recv_buf[13]={0x00};
@@ -150,6 +151,7 @@ u8 recive_frame_check(u8 type)
         case UART_DATA_SR_ONOFF:
         case UART_DATA_IR_STATUS:
         case UART_DATA_SR_SET_STATUS:
+        case UART_DATA_TEST_MODE:
             return 2;
         break;
         //judge whether it is receive callback cmd?
@@ -163,6 +165,8 @@ u8 recive_frame_check(u8 type)
         case UART_DATA_SR_ONOFF|0x80:
         case UART_DATA_IR_STATUS|0x80:
         case UART_DATA_SR_SET_STATUS|0x80:
+        case UART_DATA_TEST_MODE|0x80:
+        case UART_DATA_TEST_RESULT|0x80:
             return 1;
         break;
         default:
@@ -369,7 +373,9 @@ static void uart_recv_handle(char *FrameData)
         }
         case UART_DATA_GET_SN:{
             u8 tmpData[32] = {0};
-            memcpy(tmpData, gd.save_data.sn, 32);
+            if(gd.save_data.sn_exist){
+                memcpy(tmpData, gd.save_data.sn, 32);
+            }               
             send_reply_by_uart(UART_DATA_GET_SN,tmpData,32,0,1);
             break;
         }
@@ -419,6 +425,28 @@ static void uart_recv_handle(char *FrameData)
                 gd.dev_table[SERVO_DEV].dev_ioctl(servo_ctrl, SERVO_CMD_SET_ANGLE, (u32)angle);
             }
             send_reply_by_uart(UART_DATA_SR_SET_STATUS,&orderbuf->Data[0],4,0,1);
+            break;
+        }
+        case UART_DATA_TEST_MODE:{
+            u8 reply = 0x00;
+            u8 do_enter = 0;
+            if (orderbuf->data_len < 1) {
+                send_reply_by_uart(UART_DATA_TEST_MODE, &reply, 1, 0, 1);
+                break;
+            }
+            if (orderbuf->Data[0] == 0x01) {
+                if (!g_ota_busy) {
+                    reply = 0x01;
+                    do_enter = 1;
+                }
+            } else {
+                test_mode_exit();
+                reply = 0x00;
+            }
+            send_reply_by_uart(UART_DATA_TEST_MODE, &reply, 1, 0, 1);
+            if (do_enter) {
+                test_mode_enter();
+            }
             break;
         }
         case OTA_READ_VERSION:{

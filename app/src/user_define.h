@@ -37,6 +37,7 @@ typedef struct {
     char *version;
     char *uuid;
     char *sn;
+    uint8_t sn_exist;
 }SAVE_DATA;
 
 typedef struct{

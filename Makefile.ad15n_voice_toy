@@ -246,6 +246,7 @@ c_SRC_FILES := \
 	app/src/dev_control/key_control.c \
 	app/src/dev_control/led_control.c \
 	app/src/dev_control/servo_control.c \
+	app/src/dev_control/test_mode.c \
 	app/src/mydev_manage.c \
 	app/src/uart_communication.c \
 	app/src/user.c \
