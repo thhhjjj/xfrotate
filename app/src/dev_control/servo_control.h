@@ -6,6 +6,8 @@ typedef struct _servo_platform_data {
     u8  half_zone_flag;//0:mid,1:left,2:right
     u8  mov_dir;
     u16 open_time;
+    u16 l_mov_speed;
+    u16 r_mov_speed;
     u32 lservo_pins;
     u32 rservo_pins;
     u32 angle0_switch_pins;

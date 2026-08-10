@@ -16,7 +16,7 @@
 #define IO_ANGLE90   IO_PORTA_01
 #define IO_ANGLE180  IO_PORTB_05
 
-#define SERVO_MOVE_SPEED 4
+#define DEFUALT_SERVO_MOVE_SPEED 4
 
 #define IO_SERVO_OUT(IO_SERVO,IO_LEVEL)do{     \
     gpio_write(IO_SERVO, IO_LEVEL);    \
@@ -34,6 +34,8 @@ SERVO_PLATFORM_DATA servo_platform_data = {
     .half_zone_flag = MID,
     .mov_dir = STOP,
     .open_time = 0,
+    .l_mov_speed = DEFUALT_SERVO_MOVE_SPEED,
+    .r_mov_speed = DEFUALT_SERVO_MOVE_SPEED,
     .lservo_pins = IO_LSERVO,
     .rservo_pins = IO_RSERVO,
     .angle0_switch_pins = IO_ANGLE0,
@@ -105,11 +107,17 @@ void servo_switch_read(void *dev) //4ms任务
     if((g_test_mode)&&((servo_left_switch == 1)&&(servo_mid_switch == 1)&&(servo_right_switch == 1))){
         servo_test_flag = 3;
     }
-    if ((state_cnt != 0) && (pdata->mov_dir != STOP)) {
+    if ((state_cnt != 0)&&(pdata->mov_dir != STOP)) {
         state_cnt++;
         if (state_cnt >= 300) {
             pdata->mov_dir = STOP;
         }
+    }
+    //protect servo move out of range
+    if(((pdata->open_time)&&(pdata->mov_dir == LEFT)&&(pdata->half_zone_flag==LEFT_MAX))||
+       ((pdata->open_time)&&(pdata->mov_dir == RIGHT)&&(pdata->half_zone_flag==RIGHT_MAX))){
+        pdata->mov_dir = STOP;
+        pdata->open_time = 0;
     }
 }
 
@@ -125,10 +133,10 @@ void move_set(void *dev, u16 angle)
 
     if (dev_ctrl->str_angle < dev_ctrl->obj_angle) {
         pdata->mov_dir = RIGHT;
-        pdata->open_time = (dev_ctrl->obj_angle - dev_ctrl->str_angle) * SERVO_MOVE_SPEED;
+        pdata->open_time = (dev_ctrl->obj_angle - dev_ctrl->str_angle) * pdata->r_mov_speed;
     } else if (dev_ctrl->str_angle > dev_ctrl->obj_angle) {
         pdata->mov_dir = LEFT;
-        pdata->open_time = (dev_ctrl->str_angle - dev_ctrl->obj_angle) * SERVO_MOVE_SPEED;
+        pdata->open_time = (dev_ctrl->str_angle - dev_ctrl->obj_angle) * pdata->l_mov_speed;
     } else {
         pdata->mov_dir = STOP;
         pdata->open_time = 0;
@@ -145,12 +153,17 @@ void move_func(void *dev) //4ms执行
         IO_SERVO_OUT(IO_RSERVO, 0);
         return;
     }
+    int step_tick = 0;
+    if(pdata->mov_dir == RIGHT){
+        step_tick = pdata->r_mov_speed + dev_ctrl->dyn_speed_offset + dev_ctrl->fixed_speed_offset;
+    }else{
+        step_tick = pdata->r_mov_speed + dev_ctrl->dyn_speed_offset + dev_ctrl->fixed_speed_offset;
+    }
+    step_tick = pdata->l_mov_speed + dev_ctrl->dyn_speed_offset + dev_ctrl->fixed_speed_offset;
 
-    int step_tick = SERVO_MOVE_SPEED + dev_ctrl->dyn_speed_offset + dev_ctrl->fixed_speed_offset;
-    if (step_tick < 1) {
+    if (step_tick < 1){
         step_tick = 1;
     }
-
     if (pdata->mov_dir == RIGHT) {
         if (pdata->open_time > 0) {
             pdata->open_time--;
