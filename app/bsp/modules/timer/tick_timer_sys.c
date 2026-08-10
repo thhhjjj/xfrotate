@@ -86,9 +86,11 @@ void tick_timer_loop()
     if(0==(tick_cnt%150)){//500ms
         post_msg(1, MSG_300MS);
     }
-    if (0 == (g_tick_cnt % 250)) { //500ms
-        g_tick_cnt = 0;
+    if(0 == (tick_cnt % 250)) { //500ms
         post_msg(1, MSG_500MS);
+    }
+    if(0==(tick_cnt%1000)){//1s
+        post_msg(1, MSG_1S);
     }
 
     if (0 == (tick_cnt % 5000)) {//5s

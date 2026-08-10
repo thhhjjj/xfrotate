@@ -10,7 +10,7 @@
 
 /*---------UART Configuration---------------*/
 #define UART_TX_OUTPUT_CH_EN        ENABLE
-#define UART_OUTPUT_CH_PORT			IO_PORTB_00
+#define UART_OUTPUT_CH_PORT			IO_PORTB_09
 
 /*---------KEY Configuration---------------*/
 //AD KEY

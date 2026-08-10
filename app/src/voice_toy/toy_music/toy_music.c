@@ -248,15 +248,15 @@ void toy_music_app(void)
             }
 #endif
         case MSG_KEY:
-            if (g_test_mode) {
-                test_mode_on_key((u8)msg[1]);
-                break;
-            }
             switch (msg[1])
             {                
                 case PRESS:
                     log_info("PRESS\n");
-                    gd.dev_table[SERVO_DEV].dev_ioctl(servo_ctrl, SERVO_CMD_SET_ANGLE, 45);
+                    if(g_test_mode){
+                        log_info("test key press\n");
+                        key_test_flag = 1;
+                    }
+                    //gd.dev_table[SERVO_DEV].dev_ioctl(servo_ctrl, SERVO_CMD_SET_ANGLE, 45);
                     break;
                 case DOUBLE_PRESS:
                     log_info("DOUBLE_PRESS\n");
@@ -282,7 +282,10 @@ void toy_music_app(void)
                 if((!tmpData)&&(infrared_ctrl->human_flag)){
                     log_info("human_flag:%d\n",infrared_ctrl->human_flag);
                     tmpData = infrared_ctrl->human_flag;
-                    if (!g_ota_busy && !g_test_mode) {
+                    if (g_test_mode){
+                        log_info("test infrared human\n");
+                        ir_test_flag = 1;
+                    }else if (!g_ota_busy) {
                         send_cmd_by_uart(UART_DATA_IR_STATUS,&tmpData,1,0,1);
                     }
                 }else if((tmpData)&&(!infrared_ctrl->human_flag)){
@@ -294,14 +297,13 @@ void toy_music_app(void)
                 }
             }  
             gd.dev_table[SERVO_DEV].dev_write(servo_ctrl, NULL, 0);
-            test_mode_poll_24ms();
             break;
         case MSG_300MS:
             zc_await_reply();
             break;
         case MSG_500MS:
             wdt_clear();
-            test_mode_poll_500ms();
+            test_poll_500ms();
             //log_info("MSG_500MS\n");
             break;
         case MSG_UARTRX:

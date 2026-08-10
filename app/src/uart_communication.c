@@ -14,6 +14,7 @@
 #include "infrared_control.h"
 #include "user_define.h"
 #include "test_mode.h"
+#include "printf.h"
 UART_BUF Uart_buf = {0x00};
 ZC_UART *ZcUart = NULL;
 // u8 recv_buf[13]={0x00};
@@ -305,6 +306,13 @@ int err_code = 0;
 extern INFRARED_CTRL *infrared_ctrl;
 extern SERVO_CTRL *servo_ctrl;
 extern void nostalgia_write_userid(void);
+extern char sn[33];
+void bytes_to_hex_str(uint8_t *data, char *str) {
+    for (int i = 0; i < 16; i++) {
+        sprintf(str + i * 2, "%02X", data[i]);
+    }
+    str[32] = '\0';  // 添加字符串结束符
+}
 static void uart_recv_handle(char *FrameData)
 {
 //safe check
@@ -366,25 +374,26 @@ static void uart_recv_handle(char *FrameData)
     switch (orderbuf->Type)
     {
         case UART_DATA_GET_UUID:{
-            u8 tmpData[17] = {0};
-            memcpy(tmpData, gd.save_data.uuid, 17);
-            send_reply_by_uart(UART_DATA_GET_UUID,tmpData,17,0,1);
+            u8 tmpData[32+1] = {0};
+            bytes_to_hex_str((uint8_t*)gd.save_data.uuid, (char*)tmpData);
+            send_reply_by_uart(UART_DATA_GET_UUID,tmpData,32,0,1);
             break;
         }
         case UART_DATA_GET_SN:{
             u8 tmpData[32] = {0};
             if(gd.save_data.sn_exist){
-                memcpy(tmpData, gd.save_data.sn, 32);
+                memcpy(tmpData, gd.save_data.sn, strlen(gd.save_data.sn));
             }               
-            send_reply_by_uart(UART_DATA_GET_SN,tmpData,32,0,1);
+            send_reply_by_uart(UART_DATA_GET_SN,(unsigned char*)tmpData,strlen((char*)tmpData),0,1);
             break;
         }
         case UART_DATA_SET_SN:{
-            u8 tmpData[33] = {0};
-            tmpData[0] = 0x01;
-            memcpy(tmpData + 1, orderbuf->Data, 32);
-            vm_write(SN_INFO_SAVE, tmpData , 33);
-            send_reply_by_uart(UART_DATA_SET_SN,&tmpData[0],1,0,1);
+            gd.save_data.sn_exist = 1;
+            sn[0] = 1;
+            memcpy(sn+1, orderbuf->Data, orderbuf->data_len);
+            gd.save_data.sn=&sn[1];
+            vm_write(SN_INFO_SAVE,(u8*)sn, sizeof(sn));
+            send_reply_by_uart(UART_DATA_SET_SN,(unsigned char*)&sn[0],1,0,1);
             break;
         }
         case UART_DATA_IR_ONOFF:{
@@ -672,7 +681,7 @@ void uart_recv_task(char *buf, int len)
                 }
                 uart_recv_handle((char *)RecvBuff);
             }else{
-                log_info("checksum fail");
+                log_info("checksum fail,expected:%04x,actual:%04x",chk,ZcUart->FrameHead.checksum);
             }
             reset_recv_states();
         }

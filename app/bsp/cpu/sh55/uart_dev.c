@@ -723,8 +723,8 @@ struct uart_platform_data_t arg;
 u8 read_buf[2048] __attribute__((aligned(4)))= {0};//cbuf
 u8 read_data[700] __attribute__((aligned(4)))= {0};//rx_buf
 //u8 clr_dump[64];
-#define TX_PIN IO_PORTA_07
-#define RX_PIN IO_PORTA_06
+#define TX_PIN IO_PORTA_06
+#define RX_PIN IO_PORTA_07
 #define BAUD 921600
 
 void uart1_rx_callback(void *bus, unsigned int event)

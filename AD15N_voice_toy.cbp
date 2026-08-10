@@ -347,6 +347,10 @@
 			<Option compilerVar="CC" />
 		</Unit>
 		<Unit filename="app/src/mydev_manage.h" />
+		<Unit filename="app/src/test_mode.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="app/src/test_mode.h" />
 		<Unit filename="app/src/uart_communication.c">
 			<Option compilerVar="CC" />
 		</Unit>

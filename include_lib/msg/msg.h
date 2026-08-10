@@ -82,6 +82,7 @@ enum {
     MSG_4MS,
     MSG_24MS,
     MSG_300MS,
+    MSG_1S,
     UART_5S,
     //
 

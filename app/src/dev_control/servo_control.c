@@ -1,7 +1,7 @@
 #include "servo_control.h"
 #include "mcpwm.h"
 #include "gpio.h"
-
+#include "test_mode.h"
 #include "my_malloc.h"
 #include "malloc.h"
 #include "log.h"
@@ -10,8 +10,8 @@
 #define LOG_TAG_CONST       NORM
 #define LOG_TAG             "[servo_control]"
 
-#define IO_LSERVO    IO_PORTA_11
-#define IO_RSERVO    IO_PORTA_12
+#define IO_LSERVO    IO_PORTA_12
+#define IO_RSERVO    IO_PORTA_11
 #define IO_ANGLE0    IO_PORTA_02
 #define IO_ANGLE90   IO_PORTA_01
 #define IO_ANGLE180  IO_PORTB_05
@@ -59,8 +59,14 @@ void servo_switch_read(void *dev) //4ms任务
     SERVO_PLATFORM_DATA *pdata = dev_ctrl->platform_data;
     static u16 state_cnt = 0;
     //log_info("servo_switch_state:%d,%d,%d\n",gpio_read(IO_ANGLE0),gpio_read(IO_ANGLE90),gpio_read(IO_ANGLE180));
-    if ((!gpio_read(IO_ANGLE0)) && (pdata->half_zone_flag == LEFT_ZONE)) {
+    if (!gpio_read(IO_ANGLE0)) {
         pdata->half_zone_flag = LEFT_MAX;
+        if(g_test_mode){
+            servo_left_switch = 1;
+            log_info("test servo left max\n");
+        }else{
+            log_info("servo left max\n");
+        }
         state_cnt = 1;
     } else {
         state_cnt = 0;
@@ -69,6 +75,12 @@ void servo_switch_read(void *dev) //4ms任务
     if (!gpio_read(IO_ANGLE90)) {
         state_cnt = 1;
         pdata->half_zone_flag = MID;
+        if(g_test_mode){
+            servo_mid_switch = 1;
+            log_info("test servo mid\n");
+        }else{
+            log_info("servo mid\n");
+        }
     } else {
         state_cnt = 0;
         if (pdata->mov_dir == LEFT) {
@@ -78,13 +90,21 @@ void servo_switch_read(void *dev) //4ms任务
         }
     }
 
-    if ((!gpio_read(IO_ANGLE180)) && (pdata->half_zone_flag == RIGHT_ZONE)) {
+    if (!gpio_read(IO_ANGLE180)) {
         state_cnt = 1;
         pdata->half_zone_flag = RIGHT_MAX;
+        if(g_test_mode){
+            servo_right_switch = 1;
+            log_info("test servo right max\n");
+        }else{
+            log_info("servo right max\n");
+        }
     } else {
         state_cnt = 0;
     }
-
+    if((g_test_mode)&&((servo_left_switch == 1)&&(servo_mid_switch == 1)&&(servo_right_switch == 1))){
+        servo_test_flag = 3;
+    }
     if ((state_cnt != 0) && (pdata->mov_dir != STOP)) {
         state_cnt++;
         if (state_cnt >= 300) {

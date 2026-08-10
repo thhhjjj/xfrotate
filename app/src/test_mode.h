@@ -15,11 +15,15 @@
 #define TEST_ITEM_TIMEOUT_TICKS  60
 
 extern u8 g_test_mode;
+extern u8 key_test_flag;
+extern u8 ir_test_flag;
+extern u8 servo_test_flag;
+extern u8 servo_left_switch;
+extern u8 servo_mid_switch;
+extern u8 servo_right_switch;
 
 void test_mode_enter(void);
 void test_mode_exit(void);
-void test_mode_on_key(u8 key_event);
-void test_mode_poll_24ms(void);
-void test_mode_poll_500ms(void);
+extern void test_poll_500ms(void);
 
 #endif
