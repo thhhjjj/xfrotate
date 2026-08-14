@@ -65,14 +65,14 @@ void sys_tick_timer(u32 cnt)
     }
 
 }
-
+extern u32 rand32;
 void tick_timer_loop()
 {
     static u16 tick_cnt = 0;
     tick_cnt ++;
     
     g_tick_cnt ++;
-
+    rand32++;
     sys_tick_timer(g_tick_cnt);
     app_timer_loop();
     modules_tick_timer(g_tick_cnt);

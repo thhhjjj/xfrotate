@@ -17,25 +17,20 @@ typedef struct _servo_platform_data {
 
 typedef struct{
     SERVO_PLATFORM_DATA *platform_data;
-    int  dyn_speed_offset;
-    int  fixed_speed_offset;
+    int  left_dyn_speed_offset;
+    int  right_dyn_speed_offset;
     u16  str_angle;//start angle of servo motor
     u16  obj_angle;//target angle of servo motor
     u16  cur_angle;//current angle of servo motor
+    u8   init_flag;//init_flag
 }SERVO_CTRL;
 
-typedef struct save{
-    u16 cur_angle;
-    int dyn_speed_offset;
-    int fixed_speed_offset;
-}SERVO_SAVE_DATA;
 enum
 {
     MID=0,
-    LEFT_ZONE,
     LEFT_MAX,
-    RIGHT_ZONE,
     RIGHT_MAX,
+    NONE,       //无任何限位开关按下
 };
 enum
 {
@@ -47,6 +42,18 @@ enum
 enum
 {
     SERVO_CMD_SET_ANGLE,
+};
+enum{//init stage
+    INIT_START,
+    FINDING_0,
+    FINDED_0,//START
+    FINDING_180,
+    FINDED_180,//COUNT RIGHT
+    FINDING_0AGIN,
+    FINDED_0AGIN,//COUNT LEFT
+    BACKING_90,
+    BACKED_90,//RESET
+    INIT_OVER,
 };
 extern void udelay(u32 us);
 void local_irq_enable();

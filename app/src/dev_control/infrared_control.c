@@ -37,52 +37,7 @@ void reg_send(u32 REG_IN)
         b--;
     }
 }
-#if 0
-u8 reg_read(void)
-{
-	u64 raw_data=0;
-	u8 i,flag =0;
-	u32 raw_high, raw_low;
-    local_irq_disable();
-	DOCI_OUT(LOW);
-	udelay(5);
-	DOCI_OUT(HIGH);
-	udelay(100);
-	DOCI_OUT(LOW);
-	udelay(2);
-	for(i = 0; i < 40; i ++)
-	{
-		DOCI_OUT(HIGH);
-		udelay(1);
-		DOCI_IN();
-		udelay(3);
 
-		if(gpio_read(IO_DOCI))
-		{
-			raw_data |= 0x8000000000ULL >> i;
-		}
-		udelay(1);
-		DOCI_OUT(LOW);
-		udelay(1);
-	}
-    local_irq_enable();
-	raw_high = (raw_data >> 32) & 0xFFFFFFFFUL;
-	raw_low  = raw_data & 0xFFFFFFFFUL;
-	//log_info("raw_data high=0x%X low=0x%X", raw_high, raw_low);
-
-	ADC_REG = (raw_data >> 25) & 0X3FFF;
-	if((raw_data & 0x8000000000ULL) == 0x8000000000ULL){
-		flag = 1;
-		//log_info("ADC_REG = %d", ADC_REG);
-	}
-	else{
-		flag = 0;
-		ADC_REG = 0xFFFFFFFFU;
-		//log_info("ADC OVERFLOW");
-	}
-	return flag;
-}
-#endif
 u8 reg_read(void)
 {
     u8 triggered = 0;
@@ -119,7 +74,7 @@ void *infrared_open(void* arg)
     SERIN_OUT(LOW);
     DOCI_OUT(LOW);
     //infrared_io_init();
-    REG = 0x640910U;//0xFF0 104U;
+    REG = 0x01A0110U;//0x640910U;
     local_irq_disable();
     // init register
     udelay(1000);
@@ -195,7 +150,6 @@ void *infrared_write(void *dev, void *data, u32 len)
     REG = cfg_reg;
     return dev;
 }
-
 
 void *infrared_ioctl(void *dev, u32 cmd, u32 arg)
 {
