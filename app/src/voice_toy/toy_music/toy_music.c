@@ -258,23 +258,18 @@ void toy_music_app(void)
                         log_info("test key press\n");
                         key_test_flag = 1;
                     }
-                    multi_test_angle = rand32%181;
+                    multi_test_angle++;
                     log_info("PRESS:%d\n",multi_test_angle);
                     gd.dev_table[SERVO_DEV].dev_ioctl(servo_ctrl, SERVO_CMD_SET_ANGLE, multi_test_angle);
                     break;
                 case DOUBLE_PRESS:
                     log_info("DOUBLE_PRESS\n");
-                    if(multi_test_angle>10){
-                        multi_test_angle-=10;
-                    }
+                    multi_test_angle--;
                     gd.dev_table[SERVO_DEV].dev_ioctl(servo_ctrl, SERVO_CMD_SET_ANGLE, multi_test_angle);
                     break;
                 case LONG_PRESS:
                     log_info("LONG_PRESS\n");
-                    multi_test_angle+=10;
-                    if(multi_test_angle>=180){
-                        multi_test_angle=180;
-                    }
+                    multi_test_angle = 180;
                     gd.dev_table[SERVO_DEV].dev_ioctl(servo_ctrl, SERVO_CMD_SET_ANGLE, multi_test_angle);
                     break;
                 default:
@@ -283,9 +278,9 @@ void toy_music_app(void)
             break;
         case MSG_4MS:
             gd.dev_table[KEY_DEV].dev_read(NULL);
-            gd.dev_table[SERVO_DEV].dev_write(servo_ctrl, NULL, 0);
             break;
         case MSG_24MS:
+            soft_pwm_set(servo_ctrl);
             static u32 utemp = 0xFFFFFFFFU;
             static u8 tmpData = 0;
             u32 *ptemp = gd.dev_table[INFRARED_DEV].dev_read(infrared_ctrl);

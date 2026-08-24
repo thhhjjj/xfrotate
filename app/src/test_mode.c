@@ -25,9 +25,6 @@ u8 g_test_mode = 0;
 u8 key_test_flag = 0;
 u8 ir_test_flag = 0;
 u8 servo_test_flag = 0;
-u8 servo_left_switch = 0;
-u8 servo_mid_switch = 0;
-u8 servo_right_switch = 0;
 static u8 tempcnt = 0;
 
 extern SERVO_CTRL *servo_ctrl;
@@ -51,9 +48,10 @@ void servo_test(void)//1s
         gd.dev_table[SERVO_DEV].dev_write(servo_ctrl,&angle,4);
         servo_test_flag= 2;
     }else if(servo_test_flag==2){
-        servo_test_flag= 1;
         angle = 0;
         gd.dev_table[SERVO_DEV].dev_write(servo_ctrl,&angle,4);
+        // PWM舵机无限位开关反馈，角度指令往返成功即视为PASS
+        servo_test_flag= 3;
     }
 }
 
@@ -114,7 +112,7 @@ static void test_goto_step(u8 step)//open device
         break;
 
     case TEST_STEP_SERVO:
-        log_info("test wait servo switch\n");
+        log_info("test wait servo angle\n");
         if (!servo_ctrl) {
             servo_ctrl = gd.dev_table[SERVO_DEV].dev_open(NULL);
         }

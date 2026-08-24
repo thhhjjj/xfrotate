@@ -34,6 +34,7 @@ typedef enum {
     UART_DATA_SR_SET_STATUS,
     UART_DATA_TEST_MODE,
     UART_DATA_TEST_RESULT,
+    UART_DATA_SR_CUR_ANGLE,
 } UART_DATA_TYPE;
 // ======================= 帧头结构体 =======================
 // frame head define

@@ -34,8 +34,8 @@ static unsigned short checksum_frame(u8 *buf, u32 need_byte);
 void data_send(u8 *buf,int buf_size)
 {
     if (!g_ota_busy) {
-        log_info("===========send data===========");
-        put_buf(buf, buf_size);
+        // log_info("===========send data===========");
+        // put_buf(buf, buf_size);
     }
     Uart_buf.buf = buf;
     Uart_buf.size = buf_size;
@@ -153,6 +153,7 @@ u8 recive_frame_check(u8 type)
         case UART_DATA_IR_STATUS:
         case UART_DATA_SR_SET_STATUS:
         case UART_DATA_TEST_MODE:
+        case UART_DATA_SR_CUR_ANGLE:
             return 2;
         break;
         //judge whether it is receive callback cmd?
@@ -426,10 +427,12 @@ static void uart_recv_handle(char *FrameData)
             break;
         }
         case UART_DATA_SR_SET_STATUS:{
-            int angle =  orderbuf->Data[0]         |
+             u32 angle =  orderbuf->Data[0]        |
                          (orderbuf->Data[1] << 8)  |
                          (orderbuf->Data[2] << 16) |
                          (orderbuf->Data[3] << 24);
+            //log_info("====================angle:%d===================",angle);             
+            put_buf(orderbuf->Data,4);
             if(servo_ctrl && orderbuf->data_len >= 4){
                 gd.dev_table[SERVO_DEV].dev_ioctl(servo_ctrl, SERVO_CMD_SET_ANGLE, (u32)angle);
             }
@@ -456,6 +459,15 @@ static void uart_recv_handle(char *FrameData)
             if (do_enter) {
                 test_mode_enter();
             }
+            break;
+        }
+        case UART_DATA_SR_CUR_ANGLE:{
+            u8 tmpData[4] = {0};
+            tmpData[0]=servo_ctrl->obj_angle;//target angle of servo motor
+            tmpData[1]=servo_ctrl->obj_angle>>8;
+            tmpData[2]=0x00;
+            tmpData[3]=0x00;
+            send_reply_by_uart(UART_DATA_SR_CUR_ANGLE,tmpData,4,0,1);
             break;
         }
         case OTA_READ_VERSION:{
