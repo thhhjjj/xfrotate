@@ -95,6 +95,7 @@ u8 SendBuff[UART_SEND_BUFF_LEN];//Send total buf
 
 extern u8 send_replycmd(char *FrameData);
 extern int send_cmd_by_uart(unsigned char Type, unsigned char *data, unsigned short len, unsigned short Fuid, unsigned short total_num);
+extern int send_push_by_uart(unsigned char Type, unsigned char *data, unsigned short len, unsigned short Fuid, unsigned short total_num);
 extern void uart_recv_task(char *buf,int len);
 extern int zc_uart_init(void);
 extern void zc_await_reply(void);

@@ -12,7 +12,6 @@ typedef struct{
     u32 str_angle;//起始角度
     u32 cur_angle;//当前角度
     u32 obj_angle;//目标角度
-    u8  slow_acc;//高端减速区分频计数
 }SERVO_CTRL;
 //CMD
 enum

@@ -15,11 +15,12 @@
     gpio_write(IO_PWM, IO_LEVEL);    \
 }while(0)               
 
-/* 角度渐变速度: 每个24ms刷新周期移动的度数(可调, 2约等于83度/秒) */
-#define SERVO_MOVE_SPEED       2   /* 常规速度(0~160度) */
-#define SERVO_MOVE_SPEED_SLOW  1   /* 高端区单次步进度数 */
-#define SERVO_SLOW_START_ANGLE 160 /* 当前角度达到该值后进入高端减速区 */
-#define SERVO_SLOW_TICKS       2   /* 高端区每N个刷新周期走一步(越大越柔) */
+/* 统一区域速度: 每个24ms刷新周期移动的度数(可调, 2约等于83度/秒) */
+#define SERVO_MOVE_SPEED       2   /* 全行程统一速度, 无减速区 */
+
+/* 死区角度: 0~x度和y~180度为死区, 有效行程范围[x, y] */
+#define SERVO_ANGLE_MIN     5   /* 死区下界x: 目标小于x按x占空比输出 */
+#define SERVO_ANGLE_MAX     175 /* 死区上界y: 目标大于y按y占空比输出 */
 
 SERVO_PLATFORM_DATA servo_platform_data = {
     .high_time = 1500,
@@ -28,14 +29,22 @@ SERVO_PLATFORM_DATA servo_platform_data = {
 
 static u32 servo_angle_to_high_time(u32 angle)
 {
-    if (angle > 178) {
-        return 2292;
+    if (angle < SERVO_ANGLE_MIN) {
+        angle = SERVO_ANGLE_MIN;
+    } else if (angle > SERVO_ANGLE_MAX) {
+        angle = SERVO_ANGLE_MAX;
     }
     return angle * 9 + 500;
 }
 
 static void servo_set_target(SERVO_CTRL *dev, u32 angle)
 {
+    /* 死区钳位: 小于x按x处理, 大于y按y处理 */
+    if (angle < SERVO_ANGLE_MIN) {
+        angle = SERVO_ANGLE_MIN;
+    } else if (angle > SERVO_ANGLE_MAX) {
+        angle = SERVO_ANGLE_MAX;
+    }
     dev->str_angle = dev->cur_angle;
     dev->obj_angle = angle;
     log_info("servo target:%d,start:%d\n", angle, dev->str_angle);
@@ -47,16 +56,6 @@ static void servo_gradient_update(SERVO_CTRL *dev)
 
     if (dev->cur_angle == dev->obj_angle) {
         return;
-    }
-    /* 高端区(160~180度)减速收尾, 低端区(0~20度)保持常规速度 */
-    if (dev->cur_angle >= SERVO_SLOW_START_ANGLE) {
-        dev->slow_acc++;
-        if (dev->slow_acc >= SERVO_SLOW_TICKS) {
-            dev->slow_acc = 0;
-            step = SERVO_MOVE_SPEED_SLOW;
-        } else {
-            step = 0;
-        }
     }
     if (dev->cur_angle < dev->obj_angle) {
         dev->cur_angle += step;
@@ -111,7 +110,6 @@ void *servo_open(void *dev)
     dev_ctrl->str_angle = 90;
     dev_ctrl->cur_angle = 90;
     dev_ctrl->obj_angle = 90;
-    dev_ctrl->slow_acc = 0;
     dev_ctrl->platform_data = &servo_platform_data;
     dev_ctrl->platform_data->high_time = servo_angle_to_high_time(dev_ctrl->cur_angle);
     return dev_ctrl;

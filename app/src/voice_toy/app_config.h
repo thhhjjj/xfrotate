@@ -30,6 +30,9 @@
 /*---------KEY VOICE Configuration---------------*/
 #define KEY_VOICE_EN   				0
 
+/*---------Infrared PIR Configuration---------------*/
+#define INFRARED_EN                 DISABLE //人体红外功能总开关
+
 /*---------power wakeup io---------------*/
 #define POWER_WAKEUP_IO				IO_PORTA_00
 

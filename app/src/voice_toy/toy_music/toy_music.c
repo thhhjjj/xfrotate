@@ -73,11 +73,14 @@ extern void uart1_rx_read(void);
 extern void uart1_tx_send(u8 *buf,int buf_size);
 extern void uart1_init(void);
 extern void zc_await_reply(void);
+extern int send_push_by_uart(unsigned char Type, unsigned char *data, unsigned short len, unsigned short Fuid, unsigned short total_num);
 extern void user_init(void);
 extern SERVO_CTRL *servo_ctrl;
 extern KEY_CTRL *key_ctrl;
 extern LED_CTRL *led_ctrl;
+#if INFRARED_EN
 extern INFRARED_CTRL *infrared_ctrl;
+#endif
 void dev_info_update(void)
 {
     vm_read(SN_INFO_SAVE, (u8*)sn, sizeof(sn));
@@ -257,6 +260,7 @@ void toy_music_app(void)
                     if(g_test_mode){
                         log_info("test key press\n");
                         key_test_flag = 1;
+                        break;
                     }
                     multi_test_angle++;
                     log_info("PRESS:%d\n",multi_test_angle);
@@ -281,6 +285,7 @@ void toy_music_app(void)
             break;
         case MSG_24MS:
             soft_pwm_set(servo_ctrl);
+#if INFRARED_EN
             static u32 utemp = 0xFFFFFFFFU;
             static u8 tmpData = 0;
             u32 *ptemp = gd.dev_table[INFRARED_DEV].dev_read(infrared_ctrl);
@@ -293,16 +298,17 @@ void toy_music_app(void)
                         log_info("test infrared human\n");
                         ir_test_flag = 1;
                     }else if (!g_ota_busy) {
-                        send_cmd_by_uart(UART_DATA_IR_STATUS,&tmpData,1,0,1);
+                        send_push_by_uart(UART_DATA_IR_STATUS,&tmpData,1,0,1);
                     }
                 }else if((tmpData)&&(!infrared_ctrl->human_flag)){
                     log_info("human_flag:%d\n",infrared_ctrl->human_flag);
                     tmpData = infrared_ctrl->human_flag;
                     if (!g_ota_busy && !g_test_mode) {
-                        send_cmd_by_uart(UART_DATA_IR_STATUS,&tmpData,1,0,1);
+                        send_push_by_uart(UART_DATA_IR_STATUS,&tmpData,1,0,1);
                     }
                 }
-            }  
+            }
+#endif
             break;
         case MSG_300MS:
             zc_await_reply();

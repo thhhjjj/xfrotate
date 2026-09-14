@@ -3,8 +3,8 @@
 
 #include "my_malloc.h"
 #include "malloc.h"
-#define IO_RED      IO_PORTA_05
-#define IO_WHITE    IO_PORTA_06
+#define IO_RED      IO_PORTA_06
+#define IO_WHITE    IO_PORTA_05
 LED_PLATFORM_DATA led_platform_data_table[LED_DEFAULT_NUM] = {
     {
         .led_func = LED_FUNC_OFF,

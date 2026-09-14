@@ -16,14 +16,18 @@ GD_T gd ={
 SERVO_CTRL *servo_ctrl = NULL;
 KEY_CTRL *key_ctrl = NULL;
 LED_CTRL *led_ctrl = NULL;
+#if INFRARED_EN
 INFRARED_CTRL *infrared_ctrl = NULL;
+#endif
 
 void mydev_open(GD_T *gd)
 {
     servo_ctrl = gd->dev_table[SERVO_DEV].dev_open(NULL);
     key_ctrl = gd->dev_table[KEY_DEV].dev_open(NULL);
     led_ctrl = gd->dev_table[LED_DEV].dev_open(NULL);
+#if INFRARED_EN
     infrared_ctrl = gd->dev_table[INFRARED_DEV].dev_open(NULL);
+#endif
     if(servo_ctrl == NULL){
         log_error("servo_open failed");
         return;
@@ -36,10 +40,12 @@ void mydev_open(GD_T *gd)
         log_error("led_open failed");
         return;
     }
+#if INFRARED_EN
     if(infrared_ctrl == NULL){
         log_error("infrared_open failed");
         return;
     }
+#endif
     log_info("all dev_open success");
 }
 
@@ -57,18 +63,22 @@ void mydev_close(GD_T *gd)
         log_error("led_close failed");
         return;
     }
+#if INFRARED_EN
     if(infrared_ctrl == NULL){
         log_error("infrared_close failed");
         return;
     }
+#endif
     gd->dev_table[SERVO_DEV].dev_release(servo_ctrl);
     gd->dev_table[KEY_DEV].dev_release(key_ctrl);
     gd->dev_table[LED_DEV].dev_release(led_ctrl);
+#if INFRARED_EN
     gd->dev_table[INFRARED_DEV].dev_release(infrared_ctrl);
+    infrared_ctrl = NULL;
+#endif
     servo_ctrl = NULL;
     key_ctrl = NULL;
     led_ctrl = NULL;
-    infrared_ctrl = NULL;   
     log_info("all dev_close success");
 }
 

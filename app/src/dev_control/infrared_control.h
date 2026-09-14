@@ -2,6 +2,11 @@
 #define INFRARED_CONTROL_H
 #include "typedef.h"
 #include "gpio.h"
+#include "app_config.h"
+
+#ifndef INFRARED_EN
+#define INFRARED_EN     0
+#endif
 
 typedef struct _infrared_platform_data {
     u32 *REG;
@@ -15,6 +20,8 @@ typedef struct{
 
 #define INFRARED_SET_FUNC_MODE 0x01
 //extern about
+
+#if INFRARED_EN
 
 #define LOW 0
 #define HIGH 1
@@ -55,4 +62,6 @@ extern void *infrared_release(void *dev);
 extern void *infrared_read(void *dev);
 extern void *infrared_write(void *dev, void *data, u32 len);
 extern void *infrared_ioctl(void *dev, u32 cmd, u32 arg);
+
+#endif /* INFRARED_EN */
 #endif // INFRARED_CONTROL_H

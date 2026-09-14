@@ -10,7 +10,11 @@ DEV_MANAGE dev_table_t[DEV_TABLE_MAX] = {
     DEV_ENTRY(char_dev, SERVO_DEV, servo_open, servo_read, servo_write, servo_ioctl, servo_release),
     DEV_ENTRY(char_dev, LED_DEV, led_open, led_read, led_write, led_ioctl, led_release),
     DEV_ENTRY(char_dev, KEY_DEV, key_open, key_read, key_write, key_ioctl, key_release),
+#if INFRARED_EN
     DEV_ENTRY(char_dev, INFRARED_DEV, infrared_open, infrared_read, infrared_write, infrared_ioctl, infrared_release),
+#else
+    DEV_ENTRY(char_dev, INFRARED_DEV, NULL, NULL, NULL, NULL, NULL),
+#endif
 };
 //==================== stub functions ====================
 void *dev_stub_open(void *arg)

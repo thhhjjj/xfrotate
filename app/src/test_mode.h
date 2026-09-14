@@ -11,9 +11,6 @@
 #define TEST_RESULT_OK    0x00
 #define TEST_RESULT_FAIL  0x01
 
-/* per-item timeout: 60 * 500ms = 30s */
-#define TEST_ITEM_TIMEOUT_TICKS  60
-
 extern u8 g_test_mode;
 extern u8 key_test_flag;
 extern u8 ir_test_flag;

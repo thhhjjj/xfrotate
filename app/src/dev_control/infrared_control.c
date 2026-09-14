@@ -8,6 +8,8 @@
 #include "malloc.h"
 #define LOG_TAG_CONST       NORM
 #define LOG_TAG             "[infrared_control]"
+
+#if INFRARED_EN
 u32 REG = 0;
 u32 ADC_REG = 0;
 u16 read_delay = 0;
@@ -165,4 +167,6 @@ void *infrared_ioctl(void *dev, u32 cmd, u32 arg)
     }
     return dev_ctrl;
 }
+
+#endif /* INFRARED_EN */
 

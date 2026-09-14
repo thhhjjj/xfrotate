@@ -34,8 +34,8 @@ static unsigned short checksum_frame(u8 *buf, u32 need_byte);
 void data_send(u8 *buf,int buf_size)
 {
     if (!g_ota_busy) {
-        // log_info("===========send data===========");
-        // put_buf(buf, buf_size);
+        log_info("===========send data===========");
+        put_buf(buf, buf_size);
     }
     Uart_buf.buf = buf;
     Uart_buf.size = buf_size;
@@ -284,6 +284,17 @@ int send_cmd_by_uart(unsigned char Type,       // 1. 命令类型
     return 0;
 }
 
+// push frame: send once per state change, no auto retransmit
+int send_push_by_uart(unsigned char Type, unsigned char *data, unsigned short len, unsigned short Fuid, unsigned short total_num)
+{
+    int ret = send_reply_by_uart(Type, data, len, Fuid, total_num);
+    if (ZcUart) {
+        ZcUart->tx_sending = 0;
+        ZcUart->tx_sending_cnt = 0;
+    }
+    return ret;
+}
+
 // 没有接收到回复，连发三次
 void zc_await_reply(void)//300ms
 {
@@ -304,7 +315,9 @@ void zc_await_reply(void)//300ms
 //                                                     UART recv about
 //=====================================================================================================================
 int err_code = 0;
+#if INFRARED_EN
 extern INFRARED_CTRL *infrared_ctrl;
+#endif
 extern SERVO_CTRL *servo_ctrl;
 extern void nostalgia_write_userid(void);
 extern char sn[33];
@@ -399,11 +412,11 @@ static void uart_recv_handle(char *FrameData)
         }
         case UART_DATA_IR_ONOFF:{
             u8 tmpData = 0;
+#if INFRARED_EN
             if(infrared_ctrl){
                 tmpData = 0x01;
-            }else{
-                tmpData = 0x00;
             }
+#endif
             send_reply_by_uart(UART_DATA_IR_ONOFF,&tmpData,1,0,1);
             break;
         }
@@ -418,11 +431,13 @@ static void uart_recv_handle(char *FrameData)
             break;
         case UART_DATA_IR_STATUS:{
             u8 tmpData = 0;
+#if INFRARED_EN
             if(infrared_ctrl){
                 if(infrared_ctrl->human_flag){
                     tmpData = infrared_ctrl->human_flag;
                 }
             }
+#endif
             send_reply_by_uart(UART_DATA_IR_STATUS,&tmpData,1,0,1);
             break;
         }
@@ -431,7 +446,9 @@ static void uart_recv_handle(char *FrameData)
                          (orderbuf->Data[1] << 8)  |
                          (orderbuf->Data[2] << 16) |
                          (orderbuf->Data[3] << 24);
-            //log_info("====================angle:%d===================",angle);             
+            log_info("||===============================================||",angle);   
+            log_info("||====================angle:%d===================||",angle); 
+            log_info("||===============================================||",angle);             
             put_buf(orderbuf->Data,4);
             if(servo_ctrl && orderbuf->data_len >= 4){
                 gd.dev_table[SERVO_DEV].dev_ioctl(servo_ctrl, SERVO_CMD_SET_ANGLE, (u32)angle);
