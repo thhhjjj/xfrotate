@@ -28,7 +28,9 @@
 #define  APP_CODE_DEFAULT     0
 extern void led_io_init(void);
 extern void key_io_init(void);
+#if INFRARED_EN
 extern void infrared_io_init(void);
+#endif
 extern void servo_io_init(void);
 extern void app(void);
 int c_main(int cfg_addr)
@@ -65,10 +67,12 @@ int c_main(int cfg_addr)
     SFR(JL_CLK->CON0, 19, 2, 3);
 
     system_init();
-    
+
     led_io_init();
     key_io_init();
+#if INFRARED_EN
     infrared_io_init();
+#endif
     servo_io_init();
 //     extern void get_dual_bank_info(void);
 //     get_dual_bank_info();
@@ -78,15 +82,15 @@ int c_main(int cfg_addr)
 //     u8 test_data = 0;
 //     vm_read(VM_INDEX_USER_TEST, &test_data, sizeof(test_data));
 
-//     // 地址说明 
-// #if APP_CODE_DEFAULT 
+//     // 地址说明
+// #if APP_CODE_DEFAULT
 //     r_printf("---------app_defualt------------ \n");
 //     if(test_data == 0){
 //         test_data = 0xaa;
 //         vm_write(VM_INDEX_USER_TEST, &test_data, sizeof(test_data));
 //     }
 //     vm_read(VM_INDEX_USER_TEST, &test_data, sizeof(test_data));
-//     r_printf("test_data:%d  ",test_data);    
+//     r_printf("test_data:%d  ",test_data);
 //     extern void dual_bank_test();
 //     dual_bank_test();
 // #else
