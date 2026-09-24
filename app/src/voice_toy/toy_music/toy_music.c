@@ -282,9 +282,12 @@ void toy_music_app(void)
             break;
         case MSG_4MS:
             gd.dev_table[KEY_DEV].dev_read(NULL);
+            /* 舵机 4ms 插补: 更新脉宽 CMP, 与 SERVO_STEP_US_CRUISE 对齐 */
+            if (servo_ctrl) {
+                soft_pwm_set(servo_ctrl);
+            }
             break;
         case MSG_24MS:
-            soft_pwm_set(servo_ctrl);
 #if INFRARED_EN
             static u32 utemp = 0xFFFFFFFFU;
             static u8 tmpData = 0;
