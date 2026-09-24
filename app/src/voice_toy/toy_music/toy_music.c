@@ -80,6 +80,9 @@ extern KEY_CTRL *key_ctrl;
 extern LED_CTRL *led_ctrl;
 #if INFRARED_EN
 extern INFRARED_CTRL *infrared_ctrl;
+static u8 ir_status_last;
+static u8 ir_notify_pending;
+static u8 ir_notify_data;
 #endif
 void dev_info_update(void)
 {
@@ -282,29 +285,29 @@ void toy_music_app(void)
             break;
         case MSG_4MS:
             gd.dev_table[KEY_DEV].dev_read(NULL);
+#if INFRARED_EN
+            if (ir_notify_pending && !g_ota_busy) {
+                send_push_by_uart(UART_DATA_IR_STATUS, &ir_notify_data, 1, 0, 1);
+                ir_notify_pending = 0;
+            }
+#endif
             break;
         case MSG_24MS:
             soft_pwm_set(servo_ctrl);
 #if INFRARED_EN
-            static u32 utemp = 0xFFFFFFFFU;
-            static u8 tmpData = 0;
-            u32 *ptemp = gd.dev_table[INFRARED_DEV].dev_read(infrared_ctrl);
-            if (ptemp != NULL) {
-                //log_info("infrared_read p0x%x,human_flag:%d\n", *ptemp,infrared_ctrl->human_flag);
-                if((!tmpData)&&(infrared_ctrl->human_flag)){
-                    log_info("human_flag:%d\n",infrared_ctrl->human_flag);
-                    tmpData = infrared_ctrl->human_flag;
-                    if (g_test_mode){
-                        log_info("test infrared human\n");
-                        ir_test_flag = 1;
-                    }else if (!g_ota_busy) {
-                        send_push_by_uart(UART_DATA_IR_STATUS,&tmpData,1,0,1);
-                    }
-                }else if((tmpData)&&(!infrared_ctrl->human_flag)){
-                    log_info("human_flag:%d\n",infrared_ctrl->human_flag);
-                    tmpData = infrared_ctrl->human_flag;
-                    if (!g_ota_busy && !g_test_mode) {
-                        send_push_by_uart(UART_DATA_IR_STATUS,&tmpData,1,0,1);
+            /* 采样+1ms复位; 串口通知等到 4ms 再发 */
+            if (gd.dev_table[INFRARED_DEV].dev_read(infrared_ctrl) != NULL) {
+                u8 flag = infrared_ctrl->human_flag;
+                if (flag != ir_status_last) {
+                    ir_status_last = flag;
+                    log_info("human_flag:%d\n", flag);
+                    if (g_test_mode) {
+                        if (flag) {
+                            ir_test_flag = 1;
+                        }
+                    } else if (!g_ota_busy) {
+                        ir_notify_data = flag;
+                        ir_notify_pending = 1;
                     }
                 }
             }

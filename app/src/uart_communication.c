@@ -42,6 +42,13 @@ void data_send(u8 *buf,int buf_size)
     post_msg(3,MSG_UARTTX,Uart_buf.buf,Uart_buf.size);
 }
 
+static void data_send_quiet(u8 *buf, int buf_size)
+{
+    Uart_buf.buf = buf;
+    Uart_buf.size = buf_size;
+    post_msg(3, MSG_UARTTX, Uart_buf.buf, Uart_buf.size);
+}
+
 /* build reply frame then TX immediately (for OTA finish before reset) */
 static int send_reply_by_uart_sync(unsigned char Type,
                                    unsigned char *data,
@@ -287,12 +294,30 @@ int send_cmd_by_uart(unsigned char Type,       // 1. 命令类型
 // push frame: send once per state change, no auto retransmit
 int send_push_by_uart(unsigned char Type, unsigned char *data, unsigned short len, unsigned short Fuid, unsigned short total_num)
 {
-    int ret = send_reply_by_uart(Type, data, len, Fuid, total_num);
-    if (ZcUart) {
-        ZcUart->tx_sending = 0;
-        ZcUart->tx_sending_cnt = 0;
+    UART_FRAME_HEAD FrameHead = {0};
+    unsigned short templen = 0, Chk = 0;
+
+    if (!ZcUart) {
+        return -1;
     }
-    return ret;
+    FrameHead.flag = UART_FRAM_FLAG;
+    FrameHead.len = 1 + len;
+    FrameHead.cur_num = Fuid;
+    FrameHead.total_num = total_num;
+    memcpy(&SendBuff[0], &FrameHead, HEAD_LEN);
+    SendBuff[HEAD_LEN] = Type;
+    if (len) {
+        memcpy(&SendBuff[HEAD_LEN + 1], data, len);
+    }
+    templen = HEAD_LEN + len + 1;
+    Chk = checksum_frame(SendBuff, templen);
+    SendBuff[8] = Chk;
+    SendBuff[9] = (Chk >> 8) & 0xff;
+    ZcUart->tx_send_len = templen;
+    ZcUart->tx_sending = 0;
+    ZcUart->tx_sending_cnt = 0;
+    data_send_quiet(SendBuff, ZcUart->tx_send_len);
+    return 0;
 }
 
 // 没有接收到回复，连发三次
