@@ -731,22 +731,14 @@ void uart1_rx_callback(void *bus, unsigned int event)
 {
     switch(event)
     {
+        /* 中断上下文, 不打印: 串口日志是阻塞输出 */
         case UT_RX:
-            if (!g_ota_busy) {
-                log_info("RX:\n");
-            }
             post_msg(1,MSG_UARTRX);
             break;
         case UT_RX_OT:
-            if (!g_ota_busy) {
-                log_info("RX: over time\n");
-            }
             post_msg(1,MSG_UARTRX);
             break;
         case UT_TX:
-            if (!g_ota_busy) {
-                log_info("TX:send\n");
-            }
             break;
         default:
             break;
@@ -755,18 +747,35 @@ void uart1_rx_callback(void *bus, unsigned int event)
 
 void uart1_rx_read(void)
 {
+    u32 avail;
     u32 rx_len;
-    while (1){
-        rx_len = ut->read(read_data,JL_UT1->HRXCNT, 0);//non blocking pend
-        if(rx_len == 0){
+
+    if (ut == NULL) {
+        return;
+    }
+    /* 按 kfifo 实际未读长度取; 先判非空, ut->read 才不会死等 */
+    while ((avail = kfifo_length(&uart1.kfifo)) != 0) {
+        if (avail > uart1.kfifo.buf_size) {
+            /* DMA 已覆盖未读数据, 丢弃重新同步 */
+            uart1.kfifo.buf_out = uart1.kfifo.buf_in;
             break;
         }
-        uart_recv_task((char*)read_data,rx_len);
+        if (avail > sizeof(read_data)) {
+            avail = sizeof(read_data);
+        }
+        rx_len = ut->read(read_data, avail, 0);
+        if (rx_len == 0) {
+            break;
+        }
+        uart_recv_task((char *)read_data, rx_len);
     }
 }
-    
+
 void uart1_tx_send(u8 *buf,int buf_size)
 {
+    if ((ut == NULL) || (buf == NULL) || (buf_size <= 0)) {
+        return;
+    }
     ut->write(buf,buf_size);
 }
 

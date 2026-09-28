@@ -9,6 +9,7 @@
 #define LOG_TAG             "[uart communication]"
 #include "log.h"
 #include "msg.h"
+#include "jiffies.h"
 #include "vm_api.h"
 #include "servo_control.h"
 #include "infrared_control.h"
@@ -30,23 +31,56 @@ static unsigned short checksum_frame(u8 *buf, u32 need_byte);
 //=====================================================================================================================
 //                                                      Others about
 //=====================================================================================================================
+/* 应答/推送专用; SendBuff 只留给 send_cmd_by_uart, 供 zc_await_reply 重发 */
+static u8 ReplyBuff[UART_SEND_BUFF_LEN];
+static u32 rx_last_jiffies;
+/* 残帧超过该时间没有新数据, 认为是坏帧头, 丢掉重找 */
+#define UART_RX_STALE_JIFFIES   (100 / (1000 / HZ))
+
 //data send buf
+/* 同步发送: 返回时 buf 已发完, 调用方可以马上复用 */
 void data_send(u8 *buf,int buf_size)
 {
     if (!g_ota_busy) {
         log_info("===========send data===========");
         put_buf(buf, buf_size);
     }
-    Uart_buf.buf = buf;
-    Uart_buf.size = buf_size;
-    post_msg(3,MSG_UARTTX,Uart_buf.buf,Uart_buf.size);
+    uart1_tx_send(buf, buf_size);
 }
 
 static void data_send_quiet(u8 *buf, int buf_size)
 {
-    Uart_buf.buf = buf;
-    Uart_buf.size = buf_size;
-    post_msg(3, MSG_UARTTX, Uart_buf.buf, Uart_buf.size);
+    uart1_tx_send(buf, buf_size);
+}
+
+static int uart_frame_build(u8 *out, u32 out_size,
+                            unsigned char Type,
+                            unsigned char *data,
+                            unsigned short len,
+                            unsigned short Fuid,
+                            unsigned short total_num)
+{
+    UART_FRAME_HEAD FrameHead = {0};
+    unsigned short templen = HEAD_LEN + len + 1;
+    unsigned short Chk = 0;
+
+    if (templen > out_size) {
+        log_info("uart frame too long:%d", templen);
+        return 0;
+    }
+    FrameHead.flag = UART_FRAM_FLAG;
+    FrameHead.len = 1 + len;
+    FrameHead.cur_num = Fuid;
+    FrameHead.total_num = total_num;
+    memcpy(&out[0], &FrameHead, HEAD_LEN);
+    out[HEAD_LEN] = Type;
+    if (len && data) {
+        memcpy(&out[HEAD_LEN + 1], data, len);
+    }
+    Chk = checksum_frame(out, templen);
+    out[8] = Chk;//low bit
+    out[9] = (Chk >> 8) & 0xff;//high bit
+    return templen;
 }
 
 /* build reply frame then TX immediately (for OTA finish before reset) */
@@ -56,24 +90,13 @@ static int send_reply_by_uart_sync(unsigned char Type,
                                    unsigned short Fuid,
                                    unsigned short total_num)
 {
-    UART_FRAME_HEAD FrameHead = {0};
-    unsigned short templen = 0, Chk = 0;
+    int templen;
     if (!ZcUart)
         return -1;
-    FrameHead.flag = UART_FRAM_FLAG;
-    FrameHead.len = 1 + len;
-    FrameHead.cur_num = Fuid;
-    FrameHead.total_num = total_num;
-    memcpy(&SendBuff[0], &FrameHead, HEAD_LEN);
-    SendBuff[HEAD_LEN] = Type;
-    if (len)
-        memcpy(&SendBuff[HEAD_LEN + 1], data, len);
-    templen = HEAD_LEN + len + 1;
-    Chk = checksum_frame(SendBuff, templen);
-    SendBuff[8] = Chk;
-    SendBuff[9] = (Chk >> 8) & 0xff;
-    ZcUart->tx_send_len = templen;
-    uart1_tx_send(SendBuff, ZcUart->tx_send_len);
+    templen = uart_frame_build(ReplyBuff, sizeof(ReplyBuff), Type, data, len, Fuid, total_num);
+    if (!templen)
+        return -1;
+    uart1_tx_send(ReplyBuff, templen);
     return 0;
 }
 //reset recv buff
@@ -87,47 +110,19 @@ void reset_recv_states(void)
     ZcUart->rx_rev_len = 0;
     ZcUart->rx_recving = 0;
 }
-//find frame head
-static int check_head(unsigned char *recv_buf, int *size)
+//frame head check: flag / len / cur_num / 整帧能放进 RecvBuff
+static int uart_head_valid(const UART_FRAME_HEAD *head)
 {
-    UART_FRAME_HEAD *pHead = (UART_FRAME_HEAD *)recv_buf;
-    int len = *size;
-    int offset = 0;
-    do
-    {
-        pHead = (UART_FRAME_HEAD *)(recv_buf + offset);
-        if (pHead->flag != UART_FRAM_FLAG)
-        {
-            log_info("%s: no find flag, 0x%x != 0x%x\r\n", __FUNCTION__, pHead->flag, UART_FRAM_FLAG);
-            offset++;
-            if ((offset + HEAD_LEN) > len)
-            { // 剩下不够完整帧头
-                memcpy(recv_buf, recv_buf + offset, len - offset);//更新buf
-                *size = len - offset;//更新size
-                break;
-            }
-            else
-            { // 继续查找头
-                continue;
-            }
-        }
-        if (pHead->len == 0 || pHead->cur_num >= pHead->total_num)//非法情况，数据区长度为0，当前帧大于总帧数
-        {
-            log_info("%s: param error, 0x%x, 0x%x, 0x%x\r\n",
-                   __FUNCTION__, pHead->len, pHead->cur_num, pHead->total_num);
-            // 继续查找头
-            offset++;
-            continue;
-        }
-        if (offset)
-        {
-            memcpy(recv_buf, recv_buf + offset, len - offset);//更新buf
-            *size = len - offset;
-            offset = 0;
-        }
-        break;
-    } while (offset < len);
-    return offset;
+    if (head->flag != UART_FRAM_FLAG) {
+        return 0;
+    }
+    if (head->len == 0 || head->cur_num >= head->total_num) {
+        return 0;
+    }
+    if ((u32)HEAD_LEN + head->len > UART_RECV_BUFF_LEN) {
+        return 0;
+    }
+    return 1;
 }
 //check sum
 static unsigned short checksum_frame(u8 *buf, u32 need_byte)
@@ -221,29 +216,13 @@ int send_reply_by_uart(unsigned char Type,       // 1. 命令类型
                        unsigned short Fuid,      // 4. 包序号//0 start
                        unsigned short total_num) // 5. 总包数
 {
-    UART_FRAME_HEAD FrameHead = {0};
-    unsigned short templen = 0, Chk = 0;
-    unsigned char *tmpData;
+    int templen;
     if (!ZcUart)
         return -1;
-    // 帧头
-    FrameHead.flag = UART_FRAM_FLAG;
-    FrameHead.len = 1 + len;
-    FrameHead.cur_num = Fuid;
-    FrameHead.total_num = total_num;
-    memcpy(&SendBuff[0], &FrameHead, HEAD_LEN);
-    // 帧数据
-    SendBuff[HEAD_LEN] = Type;
-    if (len)
-        memcpy(&SendBuff[HEAD_LEN + 1], data, len);
-    // 校验和
-    templen = HEAD_LEN + len + 1;//all length
-    Chk = checksum_frame(SendBuff, templen);
-    SendBuff[8] = Chk;//low bit
-    SendBuff[9] = (Chk >> 8) & 0xff;//high bit
-    ZcUart->tx_send_len = HEAD_LEN + len + 1;
-    data_send(SendBuff,ZcUart->tx_send_len);
-    //uart_tr_send_data(SendBuff, ZcUart->tx_send_len);
+    templen = uart_frame_build(ReplyBuff, sizeof(ReplyBuff), Type, data, len, Fuid, total_num);
+    if (!templen)
+        return -1;
+    data_send(ReplyBuff, templen);
     return 0;
 }
 
@@ -254,75 +233,41 @@ int send_cmd_by_uart(unsigned char Type,       // 1. 命令类型
                      unsigned short Fuid,      // 4. 包序号//0 start
                      unsigned short total_num) // 5. 总包数
 {
-    UART_FRAME_HEAD FrameHead = {0};
-    unsigned short templen = 0, Chk = 0;
-    unsigned char *tmpData;
+    int templen;
     if (!ZcUart)
         return -1;
-    // ZcUart->SendData = malloc(len + HeadLen + 1);
-    // if (ZcUart->SendData == NULL) {
-    //     log_info("ZcUart->SendData  malloc err");
-    //    return -1;
-    // }
-    // memset(ZcUart->SendData,0,len + HeadLen + 1);
-    // SendBuff = (unsigned char *)ZcUart->SendData;
-    // 帧头
-    FrameHead.flag = UART_FRAM_FLAG;
-    FrameHead.len = 1 + len;
-    FrameHead.cur_num = Fuid;
-    FrameHead.total_num = total_num;
-    memcpy(&SendBuff[0], &FrameHead, HEAD_LEN);
-
-    // 帧数据
-    SendBuff[HEAD_LEN] = Type;
-    if (len)
-        memcpy(&SendBuff[HEAD_LEN + 1], data, len);
-    // 校验和
-    templen = HEAD_LEN + len + 1;//all length
-    Chk = checksum_frame(SendBuff, templen);
-    SendBuff[8] = Chk;//low bit
-    SendBuff[9] = (Chk >> 8) & 0xff;//high bit
-    ZcUart->tx_send_len = HEAD_LEN + len + 1;
+    templen = uart_frame_build(SendBuff, sizeof(SendBuff), Type, data, len, Fuid, total_num);
+    if (!templen)
+        return -1;
+    ZcUart->tx_send_len = templen;
     data_send(SendBuff,ZcUart->tx_send_len);
     ZcUart->tx_sending = 1;
     ZcUart->tx_sending_cnt = 0;
-    // free(ZcUart->SendData);
-    //     ZcUart->SendData = NULL;
     return 0;
 }
 
 // push frame: send once per state change, no auto retransmit
 int send_push_by_uart(unsigned char Type, unsigned char *data, unsigned short len, unsigned short Fuid, unsigned short total_num)
 {
-    UART_FRAME_HEAD FrameHead = {0};
-    unsigned short templen = 0, Chk = 0;
+    int templen;
 
     if (!ZcUart) {
         return -1;
     }
-    FrameHead.flag = UART_FRAM_FLAG;
-    FrameHead.len = 1 + len;
-    FrameHead.cur_num = Fuid;
-    FrameHead.total_num = total_num;
-    memcpy(&SendBuff[0], &FrameHead, HEAD_LEN);
-    SendBuff[HEAD_LEN] = Type;
-    if (len) {
-        memcpy(&SendBuff[HEAD_LEN + 1], data, len);
+    templen = uart_frame_build(ReplyBuff, sizeof(ReplyBuff), Type, data, len, Fuid, total_num);
+    if (!templen) {
+        return -1;
     }
-    templen = HEAD_LEN + len + 1;
-    Chk = checksum_frame(SendBuff, templen);
-    SendBuff[8] = Chk;
-    SendBuff[9] = (Chk >> 8) & 0xff;
-    ZcUart->tx_send_len = templen;
-    ZcUart->tx_sending = 0;
-    ZcUart->tx_sending_cnt = 0;
-    data_send_quiet(SendBuff, ZcUart->tx_send_len);
+    data_send_quiet(ReplyBuff, templen);
     return 0;
 }
 
 // 没有接收到回复，连发三次
 void zc_await_reply(void)//300ms
 {
+    if (!ZcUart) {
+        return;
+    }
     if (ZcUart->tx_sending)
     {
         ZcUart->tx_sending_cnt++;
@@ -699,46 +644,108 @@ __free_orderbuf:
     }
 }
 
+/*
+ * 从 RecvBuff 头部开始连续解析, 一次可处理多帧, 解析完把剩余字节挪到头部.
+ * flush=1: 残帧已超时, 不再等它补齐, 逐字节往后重找帧头.
+ */
+static void uart_recv_parse(u8 flush)
+{
+    int total = ZcUart->rx_rev_len;
+    int rd = 0;
+    int skip = 0;
+    u32 need_byte;
+    u16 flag;
+    unsigned short chk;
+    UART_FRAME_HEAD head;
+
+    while (total - rd >= (int)HEAD_LEN) {
+        memcpy(&flag, RecvBuff + rd, sizeof(flag));
+        if (flag != UART_FRAM_FLAG) {
+            rd++;
+            skip++;
+            continue;
+        }
+        memcpy(&head, RecvBuff + rd, HEAD_LEN);
+        if (!uart_head_valid(&head)) {
+            rd++;
+            skip++;
+            continue;
+        }
+        need_byte = HEAD_LEN + head.len;
+        if ((u32)(total - rd) < need_byte) {
+            if (!flush) {
+                break;
+            }
+            rd++;
+            skip++;
+            continue;
+        }
+        chk = checksum_frame(RecvBuff + rd, need_byte);
+        if (chk != head.checksum) {
+            log_info("checksum fail,expected:%04x,actual:%04x", chk, head.checksum);
+            rd++;
+            skip++;
+            continue;
+        }
+        if (!g_ota_busy) {
+            log_info("checksum pass");
+        }
+        memcpy(&ZcUart->FrameHead, &head, HEAD_LEN);
+        ZcUart->RecvData = RecvBuff + rd;
+        ZcUart->rx_recving = 1;
+        uart_recv_handle((char *)(RecvBuff + rd));
+        rd += need_byte;
+    }
+    if (flush) {
+        rd = total;
+    }
+    if (skip && !g_ota_busy) {
+        log_info("uart rx skip %d byte", skip);
+    }
+
+    if (rd >= total) {
+        ZcUart->rx_rev_len = 0;
+    } else if (rd) {
+        memmove(RecvBuff, RecvBuff + rd, total - rd);
+        ZcUart->rx_rev_len = total - rd;
+    }
+    ZcUart->rx_recving = 0;
+    ZcUart->RecvData = NULL;
+}
+
 void uart_recv_task(char *buf, int len)
 {
-    if (!ZcUart) return;
+    if (!ZcUart || buf == NULL || len <= 0) return;
+    if (len > UART_RECV_BUFF_LEN) {
+        buf += len - UART_RECV_BUFF_LEN;
+        len = UART_RECV_BUFF_LEN;
+    }
     if (ZcUart->rx_rev_len + len > UART_RECV_BUFF_LEN) {
-        reset_recv_states();
-        return;
+        /* 放不下时丢最旧的字节, 保留刚收到的数据 */
+        int drop = ZcUart->rx_rev_len + len - UART_RECV_BUFF_LEN;
+        memmove(RecvBuff, RecvBuff + drop, ZcUart->rx_rev_len - drop);
+        ZcUart->rx_rev_len -= drop;
+        log_info("uart rx overflow, drop %d byte", drop);
     }
     if (!g_ota_busy) {
         log_info("===========recv data,len:%d===========",len);
+        put_buf((u8 *)buf, len);
     }
     memcpy(RecvBuff + ZcUart->rx_rev_len, buf, len);
     ZcUart->rx_rev_len += len;
-    if (!g_ota_busy) {
-        put_buf(RecvBuff,ZcUart->rx_rev_len);
+    rx_last_jiffies = jiffies;
+    uart_recv_parse(0);
+}
+
+/* 主循环定时调用: 残帧长时间补不齐时清掉, 避免挡住后面的帧 */
+void uart_recv_poll(void)
+{
+    if (!ZcUart || !ZcUart->rx_rev_len) {
+        return;
     }
-    // 搜索帧头
-    if (!ZcUart->rx_recving && ZcUart->rx_rev_len >= HEAD_LEN) {
-        if (check_head(RecvBuff, &ZcUart->rx_rev_len) == 0) {
-            memcpy(&ZcUart->FrameHead, RecvBuff, HEAD_LEN);
-            ZcUart->rx_recving = 1;
-            ZcUart->RecvData = RecvBuff;
-        } else {
-            reset_recv_states();
-        }
+    if ((u32)(jiffies - rx_last_jiffies) < UART_RX_STALE_JIFFIES) {
+        return;
     }
-    // 接收完整帧
-    if (ZcUart->rx_recving == 1) {
-        unsigned int need_byte = HEAD_LEN + ZcUart->FrameHead.len;
-        if (ZcUart->rx_rev_len >= need_byte) {
-            unsigned short chk = checksum_frame(RecvBuff, need_byte);
-            if (chk == ZcUart->FrameHead.checksum) {
-                if (!g_ota_busy) {
-                    log_info("checksum pass");
-                }
-                uart_recv_handle((char *)RecvBuff);
-            }else{
-                log_info("checksum fail,expected:%04x,actual:%04x",chk,ZcUart->FrameHead.checksum);
-            }
-            reset_recv_states();
-        }
-    }
+    uart_recv_parse(1);
 }
 

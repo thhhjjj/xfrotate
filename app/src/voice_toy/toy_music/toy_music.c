@@ -285,6 +285,9 @@ void toy_music_app(void)
             break;
         case MSG_4MS:
             gd.dev_table[KEY_DEV].dev_read(NULL);
+            /* MSG_UARTRX 丢失或被延后时, 这里兜底把 DMA 里的数据取走 */
+            uart1_rx_read();
+            uart_recv_poll();
 #if INFRARED_EN
             if (ir_notify_pending && !g_ota_busy) {
                 send_push_by_uart(UART_DATA_IR_STATUS, &ir_notify_data, 1, 0, 1);
